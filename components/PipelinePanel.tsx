@@ -138,6 +138,19 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
             <TonalRailCard result={finalResult.tonalRailResult} />
           )}
 
+          {/* Semantic integrity verified banner */}
+          {finalResult.driftIssues.length === 0 && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2.5">
+              <span
+                className="material-symbols-outlined text-green-600 flex-shrink-0"
+                style={{ fontSize: '18px', fontVariationSettings: "'FILL' 1" }}
+              >
+                verified
+              </span>
+              <p className="text-xs font-bold text-green-800">Semantic Integrity Verified — all extracted fields match</p>
+            </div>
+          )}
+
           {/* Field comparison card */}
           <div className="bg-surface-container-lowest rounded-lg overflow-hidden shadow-sm border border-slate-100">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">

@@ -279,30 +279,20 @@ export function InputPanel({
         </div>
       </div>
 
-      {/* Ambiguity flags */}
+      {/* Pre-translation notes */}
       {simplificationResult && simplificationResult.ambiguity_flags.length > 0 && (
-        <div className="bg-tertiary-fixed rounded-lg overflow-hidden border-l-4 border-tertiary shadow-sm">
-          <div className="px-5 py-3 border-b border-[#ffb3ac]/30 flex items-center gap-2">
-            <span
-              className="material-symbols-outlined text-on-tertiary-fixed-variant"
-              style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}
-            >
-              info
-            </span>
-            <p className="text-[10px] font-bold text-on-tertiary-fixed-variant uppercase tracking-widest font-label">
-              Source Ambiguity Detected
+        <div className="bg-blue-950/40 border border-blue-800/40 rounded-lg overflow-hidden">
+          <div className="px-5 py-3 border-b border-blue-800/30 flex items-center gap-2">
+            <span className="text-blue-400 text-sm">ℹ</span>
+            <p className="text-[10px] font-bold text-blue-300/80 uppercase tracking-widest font-label">
+              Pre-Translation Notes
             </p>
           </div>
           <div className="p-5">
             <ul className="space-y-2">
               {simplificationResult.ambiguity_flags.map((flag, i) => (
-                <li key={i} className="text-xs text-on-tertiary-fixed-variant flex items-start gap-2 leading-relaxed">
-                  <span
-                    className="material-symbols-outlined flex-shrink-0 mt-0.5"
-                    style={{ fontSize: '14px', fontVariationSettings: "'FILL' 1" }}
-                  >
-                    warning
-                  </span>
+                <li key={i} className="text-xs text-blue-200/80 flex items-start gap-2 leading-relaxed">
+                  <span className="text-blue-400 flex-shrink-0 mt-0.5">•</span>
                   {flag}
                 </li>
               ))}

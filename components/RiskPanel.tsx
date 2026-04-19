@@ -75,9 +75,26 @@ export function RiskPanel({ finalResult, isLoading }: Props) {
 
   const rec = RECOMMENDATION_STYLES[finalResult.recommendation];
   const recDescription = getRecommendationDescription(finalResult);
+  const isVerified = finalResult.riskLevel === 'low' && finalResult.riskScore === 0;
 
   return (
     <div className="space-y-4">
+
+      {/* Verified hero — only when perfectly clean */}
+      {isVerified && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-3">
+          <span
+            className="material-symbols-outlined text-green-600 flex-shrink-0"
+            style={{ fontSize: '32px', fontVariationSettings: "'FILL' 1" }}
+          >
+            check_circle
+          </span>
+          <div>
+            <p className="text-sm font-bold text-green-900">Translation Verified</p>
+            <p className="text-xs text-green-700 leading-relaxed">No drift or tone mark issues detected.</p>
+          </div>
+        </div>
+      )}
 
       {/* Score Card */}
       <div className="bg-surface-container-lowest rounded-lg overflow-hidden shadow-sm">
