@@ -26,9 +26,10 @@ _FREQ_MAP: dict[str, list[str]] = {
     "at bedtime":        [r"\bat\s+bedtime\b", r"\bqhs\b", r"\bqh\.s\b"],
 }
 
-# Common medication name word patterns (last word before dose, or first capitalised word)
+# Matches the LAST single word (or hyphenated word) immediately before a dose —
+# avoids capturing patient/prescriber names that precede the drug line.
 _MED_NAME_RE = re.compile(
-    r"([A-Za-z][A-Za-z0-9\-]+(?:\s+[A-Za-z][A-Za-z0-9\-]+)?)\s+"
+    r"\b([A-Za-z][A-Za-z0-9\-]{2,})\s+"          # single token: drug name
     r"(?:\d+(?:[.,]\d+)?\s*(?:mg|mcg|ml|g\b|meq|units?|iu))",
     re.IGNORECASE,
 )

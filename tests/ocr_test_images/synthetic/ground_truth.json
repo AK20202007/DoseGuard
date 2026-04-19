@@ -1,0 +1,242 @@
+[
+  {
+    "file": "label_00_lisinopril_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "lisinopril",
+      "dose_value": 10.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_00_lisinopril_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "lisinopril",
+      "dose_value": 10.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_01_metformin_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "metformin",
+      "dose_value": 500.0,
+      "dose_unit": "mg",
+      "frequency": "twice daily"
+    }
+  },
+  {
+    "file": "label_01_metformin_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "metformin",
+      "dose_value": 500.0,
+      "dose_unit": "mg",
+      "frequency": "twice daily"
+    }
+  },
+  {
+    "file": "label_02_atorvastatin_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "atorvastatin",
+      "dose_value": 20.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_02_atorvastatin_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "atorvastatin",
+      "dose_value": 20.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_03_amoxicillin_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "amoxicillin",
+      "dose_value": 500.0,
+      "dose_unit": "mg",
+      "frequency": "three times daily"
+    }
+  },
+  {
+    "file": "label_03_amoxicillin_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "amoxicillin",
+      "dose_value": 500.0,
+      "dose_unit": "mg",
+      "frequency": "three times daily"
+    }
+  },
+  {
+    "file": "label_04_omeprazole_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "omeprazole",
+      "dose_value": 20.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_04_omeprazole_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "omeprazole",
+      "dose_value": 20.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_05_amlodipine_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "amlodipine",
+      "dose_value": 5.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_05_amlodipine_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "amlodipine",
+      "dose_value": 5.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_06_sertraline_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "sertraline",
+      "dose_value": 50.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_06_sertraline_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "sertraline",
+      "dose_value": 50.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_07_levothyroxine_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "levothyroxine",
+      "dose_value": 100.0,
+      "dose_unit": "mcg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_07_levothyroxine_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "levothyroxine",
+      "dose_value": 100.0,
+      "dose_unit": "mcg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_08_metoprolol_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "metoprolol",
+      "dose_value": 25.0,
+      "dose_unit": "mg",
+      "frequency": "twice daily"
+    }
+  },
+  {
+    "file": "label_08_metoprolol_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "metoprolol",
+      "dose_value": 25.0,
+      "dose_unit": "mg",
+      "frequency": "twice daily"
+    }
+  },
+  {
+    "file": "label_09_warfarin_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "warfarin",
+      "dose_value": 5.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_09_warfarin_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "warfarin",
+      "dose_value": 5.0,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_10_digoxin_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "digoxin",
+      "dose_value": 0.125,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_10_digoxin_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "digoxin",
+      "dose_value": 0.125,
+      "dose_unit": "mg",
+      "frequency": "once daily"
+    }
+  },
+  {
+    "file": "label_11_furosemide_clean.png",
+    "noisy": false,
+    "expected": {
+      "medication_name": "furosemide",
+      "dose_value": 40.0,
+      "dose_unit": "mg",
+      "frequency": "twice daily"
+    }
+  },
+  {
+    "file": "label_11_furosemide_noisy.png",
+    "noisy": true,
+    "expected": {
+      "medication_name": "furosemide",
+      "dose_value": 40.0,
+      "dose_unit": "mg",
+      "frequency": "twice daily"
+    }
+  }
+]
