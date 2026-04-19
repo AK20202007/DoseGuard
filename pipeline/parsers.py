@@ -21,18 +21,36 @@ _DOSE_RE = re.compile(
 # ── Frequency ─────────────────────────────────────────────────────────────────
 
 _FREQ_MAP: dict[str, list[str]] = {
-    "once daily":        [r"\bonce\s+daily\b", r"\bqd\b", r"\bod\b", r"\b1x\s*daily\b", r"\bonce\b"],
-    "twice daily":       [r"\btwice\s+daily\b", r"\bbid\b", r"\bb\.i\.d\b", r"\b2x\s*daily\b", r"\btwice\b"],
-    "three times daily": [r"\bthree\s+times\s+daily\b", r"\btid\b", r"\bt\.i\.d\b", r"\b3x\s*daily\b"],
-    "four times daily":  [r"\bfour\s+times\s+daily\b", r"\bqid\b", r"\bq\.i\.d\b", r"\b4x\s*daily\b"],
-    "every 4 hours":     [r"\bq4h\b", r"\bevery\s+4\s+hours?\b"],
-    "every 6 hours":     [r"\bq6h\b", r"\bevery\s+6\s+hours?\b"],
-    "every 8 hours":     [r"\bq8h\b", r"\bevery\s+8\s+hours?\b"],
-    "every 12 hours":    [r"\bq12h\b", r"\bevery\s+12\s+hours?\b"],
-    "as needed":         [r"\bas\s+needed\b", r"\bprn\b"],
-    "at bedtime":        [r"\bat\s+bedtime\b", r"\bqhs\b", r"\bqh\.s\b"],
-    "weekly":            [r"\bonce\s+weekly\b", r"\bweekly\b", r"\bq\s*week\b", r"\bqw\b"],
-    "monthly":           [r"\bonce\s+monthly\b", r"\bmonthly\b", r"\bq\s*month\b"],
+    "once daily": [
+        r"\bonce\s+daily\b", r"\bqd\b", r"\bod\b", r"\b1x\s*daily\b",
+        r"\bevery\s+day\b",                       # "every day"
+        r"\bevery\s+24\s+hours?\b",
+        r"\btake\s+\d+\s+\w+\s+(?:by\s+mouth\s+)?(?:every\s+day|daily)\b",  # "take 1 tablet every day"
+        r"\b1\s+(?:tablet|capsule|pill|tab)\s+(?:by\s+mouth\s+)?(?:every\s+day|daily)\b",
+        r"\bonce\b(?!\s+(?:weekly|monthly|a\s+week|a\s+month))",
+    ],
+    "twice daily": [
+        r"\btwice\s+daily\b", r"\bbid\b", r"\bb\.i\.d\b", r"\b2x\s*daily\b",
+        r"\btwice\s+a\s+day\b", r"\b2\s+times?\s+(?:a\s+)?day\b",
+        r"\bevery\s+12\s+hours?\b", r"\bq12h\b",
+        r"\btake\s+\d+.*twice\b",
+    ],
+    "three times daily": [
+        r"\bthree\s+times\s+(?:a\s+)?daily\b", r"\btid\b", r"\bt\.i\.d\b", r"\b3x\s*daily\b",
+        r"\b3\s+times?\s+(?:a\s+)?day\b", r"\bthree\s+times?\s+(?:a\s+)?day\b",
+    ],
+    "four times daily": [
+        r"\bfour\s+times\s+(?:a\s+)?daily\b", r"\bqid\b", r"\bq\.i\.d\b", r"\b4x\s*daily\b",
+        r"\b4\s+times?\s+(?:a\s+)?day\b",
+    ],
+    "every 4 hours":  [r"\bq4h\b", r"\bevery\s+4\s+hours?\b"],
+    "every 6 hours":  [r"\bq6h\b", r"\bevery\s+6\s+hours?\b"],
+    "every 8 hours":  [r"\bq8h\b", r"\bevery\s+8\s+hours?\b"],
+    "every 12 hours": [r"\bq12h\b", r"\bevery\s+12\s+hours?\b"],
+    "as needed":      [r"\bas\s+needed\b", r"\bprn\b", r"\bwhen\s+needed\b"],
+    "at bedtime":     [r"\bat\s+bedtime\b", r"\bqhs\b", r"\bbefore\s+bed\b"],
+    "weekly":         [r"\bonce\s+weekly\b", r"\bweekly\b", r"\bq\s*week\b", r"\bqw\b", r"\bonce\s+a\s+week\b"],
+    "monthly":        [r"\bonce\s+monthly\b", r"\bmonthly\b", r"\bq\s*month\b", r"\bonce\s+a\s+month\b"],
 }
 
 # ── Non-drug words to skip when scanning for a medication name ────────────────

@@ -29,6 +29,7 @@ from pipeline.ocr_engines.rapidocr_engine import RapidOCREngine
 from pipeline.layer2_safety_vault import DeterministicSafetyVault
 from pipeline.models import ConsensusResult, FieldConsensus, ExtractedPrescription
 from pipeline.drug_name_validator import extract_word_candidates, validate_drug_name
+from pipeline.llm_extractor import llm_extract_fields
 
 from itertools import combinations
 from collections import Counter
@@ -177,28 +178,83 @@ async def analyze(file: UploadFile = File(...)):
     else:
         confidence_tier = "recapture_required"
 
-    # ── FDA drug-name cross-reference ─────────────────────────────────────────
-    # Collect every capitalized word from all engines' raw text, query OpenFDA,
-    # and pick the one that matches a real drug name.  Overrides the OCR-parsed
-    # name when the regex parser guessed wrong (e.g. Abatacept on separate line).
+    # ── LLM field extraction (Ollama/Mistral — free, local) ──────────────────
+    # Takes combined OCR text and asks a local LLM to extract fields.
+    # Handles pharmacy-label formats like "Take 1 tablet by mouth every day".
     all_raw = " ".join(
         r.get("raw_text", "") for r in engine_results.values() if r.get("raw_text")
     )
-    fda_candidates = extract_word_candidates(all_raw)[:12]  # top 12 unique words
+    llm_fields = await llm_extract_fields(all_raw, timeout=12.0)
+    llm_used = llm_fields is not None
+    llm_model = (llm_fields or {}).get("llm_model", "")
+
+    # Fill in missing fields from LLM if OCR engines missed them
+    for field in ("medication_name", "dose_value", "dose_unit", "frequency"):
+        if merged_fields.get(field) is None and llm_fields and llm_fields.get(field) is not None:
+            merged_fields[field] = str(llm_fields[field]) if field == "dose_value" else llm_fields[field]
+            if field in cross_check:
+                cross_check[field]["merged_value"] = merged_fields[field]
+                cross_check[field]["llm_filled"] = True
+
+    # ── FDA drug-name cross-reference + spelling validation ───────────────────
+    # Check EVERY unique name each engine returned against OpenFDA.
+    # If 2 engines have a name that's in FDA but the 3rd has a misspelling,
+    # the FDA-confirmed name wins with a boosted accuracy score.
+    fda_candidates = extract_word_candidates(all_raw)[:12]
+    # Also include LLM-extracted name as a candidate
+    if llm_fields and llm_fields.get("medication_name"):
+        llm_name = llm_fields["medication_name"]
+        if llm_name not in [c.lower() for c in fda_candidates]:
+            fda_candidates.insert(0, llm_name)
+
     fda_name, fda_score = await validate_drug_name(fda_candidates, timeout=6.0)
 
-    # Use FDA name if it's more confident than the OCR-parsed name
+    # Engine-level name cross-check: which engines agree with the FDA name?
+    engine_name_votes = {
+        n: _norm((r["fields"] or {}).get("medication_name"))
+        for n, r in available.items()
+    }
+    fda_name_norm = _norm(fda_name) if fda_name else None
+    engines_matching_fda = sum(
+        1 for v in engine_name_votes.values()
+        if v and fda_name_norm and (v == fda_name_norm or fda_name_norm in v or v in fda_name_norm)
+    )
+
     ocr_name = merged_fields.get("medication_name")
-    if fda_name and (not ocr_name or fda_score >= 0.75):
+
+    # Boost accuracy score: FDA-confirmed name that 2+ engines also got
+    fda_confirmed_majority = fda_name and engines_matching_fda >= 2
+    fda_confirmed_any = fda_name and engines_matching_fda >= 1
+
+    if fda_name and (not ocr_name or fda_score >= 0.75 or fda_confirmed_majority):
         merged_fields["medication_name"] = fda_name.lower()
         cross_check["medication_name"]["merged_value"] = fda_name.lower()
         cross_check["medication_name"]["fda_validated"] = True
+        # Boost agreement score when FDA confirms 2+ engines
+        if fda_confirmed_majority:
+            boosted = min(1.0, cross_check["medication_name"]["agreement_score"] + 0.20)
+            cross_check["medication_name"]["agreement_score"] = round(boosted, 4)
+            cross_check["medication_name"]["fda_boosted"] = True
 
     fda_result = {
         "validated_name": fda_name,
         "confidence": fda_score,
         "candidates_checked": fda_candidates,
+        "engines_matching_fda": engines_matching_fda,
+        "fda_confirmed_majority": fda_confirmed_majority,
     }
+
+    # Recompute overall consensus after boosts
+    critical_scores = [cross_check[f]["agreement_score"] for f in CRITICAL_FIELDS]
+    overall_consensus = round(min(critical_scores) if critical_scores else 0.0, 4)
+    all_unanimous = all(cross_check[f]["unanimous"] for f in CRITICAL_FIELDS)
+    majority_reached = overall_consensus >= CONSENSUS_MINIMUM
+    if all_unanimous:
+        confidence_tier = "unanimous_3_of_3"
+    elif majority_reached:
+        confidence_tier = "majority_2_of_3"
+    else:
+        confidence_tier = "recapture_required"
 
     # ── Reliability score per engine ─────────────────────────────────────────
     reliability: dict[str, dict] = {}
@@ -313,6 +369,11 @@ async def analyze(file: UploadFile = File(...)):
         "reliability": reliability,
         "layer2_safety": safety_result,
         "fda_name_lookup": fda_result,
+        "llm_extraction": {
+            "used": llm_used,
+            "model": llm_model,
+            "fields": llm_fields,
+        },
     })
 
 
