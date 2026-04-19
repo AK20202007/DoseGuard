@@ -107,8 +107,21 @@ function ResultCard({ scanResult, prescription }: { scanResult: ScanResult; pres
   );
 }
 
-export function PillScanCard({ initialDrugName }: { initialDrugName: string | null }) {
-  const [drugInput, setDrugInput] = useState(initialDrugName ?? '');
+function extractDrugName(text: string): string | null {
+  const cleaned = text.replace(/^(take|use|apply|give|administer)\s+/i, '').trim();
+  const skip = new Set(['a','an','the','one','two','three','four','five','six','seven','eight','nine','ten',
+    'tablet','tablets','capsule','capsules','drop','drops','dose','doses','pill','pills',
+    'mg','ml','mcg','g','iu','this','these','your','each','daily','times']);
+  for (const word of cleaned.split(/\s+/)) {
+    const clean = word.toLowerCase().replace(/[^a-z]/g, '');
+    if (clean.length > 3 && !skip.has(clean) && !/^\d/.test(word)) return clean;
+  }
+  return null;
+}
+
+export function PillScanCard({ initialDrugName, instructionText }: { initialDrugName: string | null; instructionText?: string }) {
+  const derived = initialDrugName ?? (instructionText ? extractDrugName(instructionText) : null);
+  const [drugInput, setDrugInput] = useState(derived ?? '');
   const [prescription, setPrescription] = useState<ResolvedPrescription | null>(null);
   const [loadingRx, setLoadingRx] = useState(false);
   const [rxError, setRxError] = useState<string | null>(null);
@@ -121,12 +134,11 @@ export function PillScanCard({ initialDrugName }: { initialDrugName: string | nu
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync drug name when parent updates after analysis
+  // Sync drug name when parent updates (analysis completes or instruction changes)
   useEffect(() => {
-    if (initialDrugName && !prescription) {
-      setDrugInput(initialDrugName);
-    }
-  }, [initialDrugName, prescription]);
+    const next = initialDrugName ?? (instructionText ? extractDrugName(instructionText) : null);
+    if (next && !prescription) setDrugInput(next);
+  }, [initialDrugName, instructionText, prescription]);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach(t => t.stop());

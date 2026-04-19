@@ -8,6 +8,7 @@ import { PillScanCard } from '@/components/PillScanCard';
 type Props = {
   finalResult: AnalysisResult | null;
   isLoading: boolean;
+  instructionText?: string;
 };
 
 const RECOMMENDATION_STYLES = {
@@ -69,9 +70,19 @@ function EmptyPanel() {
   );
 }
 
-export function RiskPanel({ finalResult, isLoading }: Props) {
+export function RiskPanel({ finalResult, isLoading, instructionText }: Props) {
   if (!finalResult && isLoading) return <SkeletonPanel />;
-  if (!finalResult) return <EmptyPanel />;
+  if (!finalResult) {
+    const earlyDrug = instructionText ? null : null; // extractDrugName is in PillScanCard
+    return (
+      <div className="space-y-4">
+        <EmptyPanel />
+        {instructionText && (
+          <PillScanCard initialDrugName={null} instructionText={instructionText} />
+        )}
+      </div>
+    );
+  }
 
   const rec = RECOMMENDATION_STYLES[finalResult.recommendation];
   const recDescription = getRecommendationDescription(finalResult);
@@ -295,7 +306,10 @@ export function RiskPanel({ finalResult, isLoading }: Props) {
       )}
 
       {/* Pill Scanner safeguard */}
-      <PillScanCard initialDrugName={finalResult.sourceFields.medication_name} />
+      <PillScanCard
+        initialDrugName={finalResult.sourceFields.medication_name}
+        instructionText={instructionText}
+      />
     </div>
   );
 }

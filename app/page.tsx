@@ -260,7 +260,7 @@ export default function Home() {
             <PipelinePanel steps={steps} finalResult={finalResult} isLoading={isLoading} />
           </div>
           <div className="col-span-12 md:col-span-3">
-            <RiskPanel finalResult={finalResult} isLoading={isLoading} />
+            <RiskPanel finalResult={finalResult} isLoading={isLoading} instructionText={instruction} />
           </div>
         </div>
 
