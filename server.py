@@ -25,7 +25,7 @@ from PIL import Image
 
 from pipeline.ocr_engines.easyocr_engine import EasyOCREngine
 from pipeline.ocr_engines.tesseract_engine import TesseractEngine
-from pipeline.ocr_engines.moondream_engine import MoondreamEngine
+from pipeline.ocr_engines.rapidocr_engine import RapidOCREngine
 from pipeline.layer2_safety_vault import DeterministicSafetyVault
 from pipeline.models import ConsensusResult, FieldConsensus, ExtractedPrescription
 from pipeline.drug_name_validator import extract_word_candidates, validate_drug_name
@@ -43,7 +43,7 @@ def _get_engines():
     if not _engines:
         _engines["easyocr"]    = EasyOCREngine()
         _engines["tesseract"]  = TesseractEngine()
-        _engines["moondream"]  = MoondreamEngine()   # free, local via Ollama
+        _engines["rapidocr"]   = RapidOCREngine()    # free, local ONNX
     return _engines
 
 CRITICAL_FIELDS = ("medication_name", "dose_value", "dose_unit")
