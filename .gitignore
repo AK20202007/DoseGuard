@@ -1,0 +1,35 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+
+# Environment
+.env
+*.env.local
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+tests/ocr_test_images/downloads/
+tests/results/
+
+# Model weights (too large for git)
+*.onnx
+*.pt
+*.pth
+*.bin
+*.safetensors
