@@ -12,6 +12,7 @@ Rules:
 - For warnings, return an empty array [] if none are present.
 - Do NOT combine or interpret information.
 - Return ONLY valid JSON with no markdown fences or commentary.
+- If the text contains multiple numbered instructions (e.g. '1. Take... 2. Take...'), extract ALL values for each field and join them with '; '
 
 Extract into this exact JSON structure:
 {

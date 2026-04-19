@@ -2,6 +2,14 @@ import type { MedicationFields } from '@/lib/types';
 import { getClient } from '@/lib/claude';
 import { buildExtractPrompt } from '@/lib/prompts/extract';
 
+function dedup(value: unknown): string | null {
+  if (typeof value !== 'string' || !value) return null;
+  if (!value.includes(';')) return value;
+  const parts = value.split(';').map(s => s.trim()).filter(Boolean);
+  const seen = new Set<string>();
+  return parts.filter(p => { if (seen.has(p)) return false; seen.add(p); return true; }).join('; ');
+}
+
 function extractJSON(text: string): string {
   const fenced = text.match(/```(?:json)?\n?([\s\S]*?)\n?```/);
   if (fenced) return fenced[1];
@@ -37,7 +45,7 @@ export async function extractMedicationFields(
     const { system, user } = buildExtractPrompt(text, role);
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1200,
+      max_tokens: 2000,
       system,
       messages: [{ role: 'user', content: user }],
     });
@@ -49,16 +57,17 @@ export async function extractMedicationFields(
       dosage_unit: parsed.dosage_unit ?? null,
       frequency: parsed.frequency ?? null,
       interval: parsed.interval ?? null,
-      route: parsed.route ?? null,
+      route: dedup(parsed.route) ?? null,
       duration: parsed.duration ?? null,
       max_daily_dose: parsed.max_daily_dose ?? null,
       warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
-      food_instruction: parsed.food_instruction ?? null,
+      food_instruction: dedup(parsed.food_instruction) ?? null,
       patient_group: parsed.patient_group ?? null,
-      conditionality: parsed.conditionality ?? null,
+      conditionality: dedup(parsed.conditionality) ?? null,
       notes: parsed.notes ?? null,
     };
-  } catch {
+  } catch (err) {
+    console.error('[semanticExtractor] extraction failed:', err);
     return nullMedicationFields();
   }
 }

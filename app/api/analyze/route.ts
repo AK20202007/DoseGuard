@@ -6,6 +6,7 @@ import { backTranslateInstruction } from '@/lib/pipeline/backTranslator';
 import { extractMedicationFields } from '@/lib/pipeline/semanticExtractor';
 import { analyzeDrift } from '@/lib/pipeline/driftAnalyzer';
 import { validateDiacritics } from '@/lib/pipeline/diacriticValidator';
+import { runTonalRail, warmMT5 } from '@/lib/pipeline/tonalRail';
 import { scoreRisk } from '@/lib/pipeline/riskScorer';
 import { generateTeachBack } from '@/lib/pipeline/teachBackGenerator';
 import { appendAuditLog } from '@/lib/auditLog';
@@ -23,6 +24,9 @@ export async function POST(request: NextRequest) {
 
   const langMeta = getLanguageMetadata(targetLanguage);
   const encoder = new TextEncoder();
+
+  // Warm up mT5 model early so it's ready when tonal rail runs
+  if (targetLanguage === 'Yoruba') warmMT5();
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -58,12 +62,20 @@ export async function POST(request: NextRequest) {
 
         emit({ step: 'translate', status: 'complete', result: translation });
 
-        // ── Step 3: Back-translation ──────────────────────────────────────
+        // ── Step 3: Tonal Rail (Yoruba only) ─────────────────────────────
+        let tonalRailResult: import('@/lib/types').TonalRailResult | undefined;
+        if (targetLanguage === 'Yoruba') {
+          emit({ step: 'tonalRail', status: 'running' });
+          tonalRailResult = await runTonalRail(effectiveSource, translation);
+          emit({ step: 'tonalRail', status: 'complete', result: tonalRailResult });
+        }
+
+        // ── Step 5: Back-translation ──────────────────────────────────────
         emit({ step: 'backTranslate', status: 'running' });
         const backTranslation = await backTranslateInstruction(translation, targetLanguage);
         emit({ step: 'backTranslate', status: 'complete', result: backTranslation });
 
-        // ── Steps 4+5: Parallel extraction ───────────────────────────────
+        // ── Steps 6+7: Parallel extraction ───────────────────────────────
         emit({ step: 'extractSource', status: 'running' });
         emit({ step: 'extractBack', status: 'running' });
         const [sourceFields, backTranslatedFields] = await Promise.all([
@@ -118,6 +130,7 @@ export async function POST(request: NextRequest) {
           teachBackQuestion,
           targetLanguage,
           languageQualityWarning: langMeta.warningMessage,
+          tonalRailResult,
           timestamp: new Date().toISOString(),
         };
 

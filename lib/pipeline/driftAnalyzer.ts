@@ -10,7 +10,7 @@ const HIGH_WEIGHT_FIELDS: Array<keyof MedicationFields> = [
   'interval',
   'max_daily_dose',
 ];
-const MEDIUM_HIGH_FIELDS: Array<keyof MedicationFields> = ['route'];
+const MEDIUM_HIGH_FIELDS: Array<keyof MedicationFields> = [];
 const MEDIUM_FIELDS: Array<keyof MedicationFields> = ['duration'];
 
 // Maps spelled-out number words to their digit equivalents so that
@@ -75,6 +75,8 @@ function canonicalizeFieldValue(value: string | null, field: keyof MedicationFie
       .replace(/\bevery\s+day\b/gi, 'daily');
 
     // Step 2: handle clinical abbreviations and interval forms
+    // Time-of-day anchors that imply once-daily dosing
+    if (/\b(at\s+bedtime|before\s+bed|nightly|at\s+night|before\s+sleep|h\.?s\.?|in\s+the\s+morning|every\s+morning|each\s+morning)\b/i.test(f)) return 'once daily';
     if (/\b(qd|q\.?d\.?|every\s*24\s*hours?)\b/i.test(f)) return 'once daily';
     if (/\b(bid|b\.?i\.?d\.?|every\s*12\s*hours?)\b/i.test(f)) return 'twice daily';
     if (/\b(tid|t\.?i\.?d\.?|every\s*8\s*hours?)\b/i.test(f)) return 'three times daily';
@@ -92,6 +94,7 @@ function canonicalizeFieldValue(value: string | null, field: keyof MedicationFie
       return `${n} times daily`;
     }
     if (/\bdaily\b/i.test(f)) return 'once daily';
+    if (/^(once|1\s*time|single\s*dose?)$/i.test(f)) return 'once';
 
     return f;
   }
@@ -127,6 +130,25 @@ function canonicalizeFieldValue(value: string | null, field: keyof MedicationFie
     d = d.replace(/\b30\s*days?\b/i, '30 days');
     d = d.replace(/\b(1\s*month|a\s*month)\b/i, '30 days');
     return d;
+  }
+
+  if (field === 'conditionality') {
+    // Split multi-instruction extractions by ";" and take the first meaningful segment
+    const parts = norm.split(';').map(s => s.trim()).filter(Boolean);
+    const primary = parts[0] ?? norm;
+    const condMap: [RegExp, string][] = [
+      [/\bas\s+needed\b/i, 'as needed'],
+      [/\bwhen\s+(you\s+)?need\b/i, 'as needed'],
+      [/\bwhen\s+pain\b/i, 'as needed'],
+      [/\bif\s+pain\b/i, 'as needed'],
+      [/\bwhen\s+required\b/i, 'as needed'],
+      [/\bprn\b/i, 'as needed'],
+      [/\bif\s+needed\b/i, 'as needed'],
+    ];
+    for (const [pattern, canonical] of condMap) {
+      if (pattern.test(primary)) return canonical;
+    }
+    return primary;
   }
 
   if (field === 'dosage_unit') {

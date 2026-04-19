@@ -3,6 +3,7 @@
 import type { AnalysisResult, PipelineStep, StreamEvent, SimplificationResult } from '@/lib/types';
 import { StepProgress } from '@/components/StepProgress';
 import { FieldComparisonTable } from '@/components/FieldComparisonTable';
+import { TonalRailCard } from '@/components/TonalRailCard';
 
 type Props = {
   steps: Map<PipelineStep, StreamEvent>;
@@ -131,6 +132,11 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
               )}
             </div>
           </div>
+
+          {/* Tonal Rail card (Yoruba only) */}
+          {finalResult.tonalRailResult && (
+            <TonalRailCard result={finalResult.tonalRailResult} />
+          )}
 
           {/* Field comparison card */}
           <div className="bg-surface-container-lowest rounded-lg overflow-hidden shadow-sm border border-slate-100">

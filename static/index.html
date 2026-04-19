@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MedPipeline — OCR Inspector</title>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a;
+    --border: #2e3350; --accent: #4f8ef7; --green: #22c55e;
+    --yellow: #f59e0b; --red: #ef4444; --text: #e2e8f0; --muted: #64748b;
+    --font: 'Inter', system-ui, sans-serif; --mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+
+  header {
+    padding: 18px 32px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 14px;
+    background: linear-gradient(90deg, #0f1117 0%, #151929 100%);
+  }
+  header .logo { font-size: 22px; font-weight: 700; letter-spacing: -.5px; }
+  header .logo span { color: var(--accent); }
+  header .sub { color: var(--muted); font-size: 13px; }
+
+  .main { max-width: 1200px; margin: 0 auto; padding: 32px 24px; }
+
+  /* Drop zone */
+  #dropzone {
+    border: 2px dashed var(--border); border-radius: 16px;
+    padding: 56px 32px; text-align: center; cursor: pointer;
+    transition: border-color .2s, background .2s;
+    background: var(--surface);
+  }
+  #dropzone.drag-over { border-color: var(--accent); background: #1a2540; }
+  #dropzone:hover { border-color: #4f6fa0; }
+  #dropzone .icon { font-size: 48px; margin-bottom: 12px; }
+  #dropzone h2 { font-size: 18px; margin-bottom: 6px; }
+  #dropzone p { color: var(--muted); font-size: 14px; }
+  #dropzone input { display: none; }
+  .btn {
+    display: inline-block; margin-top: 16px; padding: 10px 24px;
+    background: var(--accent); color: #fff; border-radius: 8px;
+    font-size: 14px; font-weight: 600; cursor: pointer; border: none;
+    transition: opacity .2s;
+  }
+  .btn:hover { opacity: .85; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Loading */
+  #loading { display: none; text-align: center; padding: 48px; }
+  .spinner {
+    width: 40px; height: 40px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .8s linear infinite; margin: 0 auto 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Results layout */
+  #results { display: none; }
+  .section-title {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--muted); margin-bottom: 12px;
+  }
+
+  /* Preview + merged */
+  .top-row { display: grid; grid-template-columns: 220px 1fr 280px; gap: 16px; margin-bottom: 20px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px;
+  }
+  #preview-img { width: 100%; border-radius: 8px; }
+
+  /* Merged box */
+  .merged-field { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .merged-field:last-child { border-bottom: none; }
+  .merged-field .label { font-size: 12px; color: var(--muted); }
+  .merged-field .value { font-weight: 600; font-size: 15px; }
+  .merged-field .conf { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+  .conf-high { background: #14532d; color: #4ade80; }
+  .conf-mid  { background: #713f12; color: #fcd34d; }
+  .conf-low  { background: #7f1d1d; color: #fca5a5; }
+
+  /* Status badge */
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    margin-bottom: 14px;
+  }
+  .status-passed    { background: #14532d; color: #4ade80; }
+  .status-recapture { background: #713f12; color: #fcd34d; }
+  .status-blocked   { background: #7f1d1d; color: #fca5a5; }
+
+  /* Engine cards */
+  .engines-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+  .engine-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .engine-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .engine-name { font-weight: 700; font-size: 14px; text-transform: uppercase; letter-spacing: .5px; }
+  .engine-badge {
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+  }
+  .badge-ok  { background: #14532d; color: #4ade80; }
+  .badge-err { background: #7f1d1d; color: #fca5a5; }
+  .badge-na  { background: #1e293b; color: #64748b; }
+  .engine-body { padding: 14px 16px; }
+  .ef-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #1e2540; font-size: 13px; }
+  .ef-row:last-child { border-bottom: none; }
+  .ef-key { color: var(--muted); }
+  .ef-val { font-weight: 500; max-width: 160px; text-align: right; word-break: break-word; }
+  .latency { font-size: 11px; color: var(--muted); margin-top: 10px; }
+  .rel-bar-wrap { margin-top: 10px; }
+  .rel-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .rel-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .rel-fill { height: 100%; border-radius: 3px; transition: width .5s ease; }
+
+  /* Cross-check table */
+  .xcheck-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+  .xcheck-card table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .xcheck-card th { background: var(--surface2); padding: 10px 14px; text-align: left; color: var(--muted); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
+  .xcheck-card td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .xcheck-card tr:last-child td { border-bottom: none; }
+  .agree-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+  .agree-true  { background: #14532d; color: #4ade80; }
+  .agree-false { background: #7f1d1d; color: #fca5a5; }
+  .score-circle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: 50%; font-weight: 700; font-size: 13px;
+    border: 2px solid;
+  }
+
+  /* Merged text output */
+  .merged-text-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+  .merged-text-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+  .merged-text-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .mtext-col { padding: 16px 18px; border-right: 1px solid var(--border); }
+  .mtext-col:last-child { border-right: none; }
+  .mtext-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .mtext-pre { font-family: var(--mono); font-size: 13px; line-height: 1.8; white-space: pre-wrap; color: var(--text); }
+  .mtext-pre .disputed { color: var(--yellow); }
+  .mtext-pre .verified { color: var(--green); }
+  .raw-tabs { display: flex; gap: 6px; padding: 10px 18px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .raw-tab { padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); transition: all .15s; }
+  .raw-tab.active { background: #1e2d4a; border-color: var(--accent); color: var(--accent); }
+  .raw-tab-content { display: none; padding: 12px 18px; font-family: var(--mono); font-size: 11px; color: #94a3b8; white-space: pre-wrap; line-height: 1.6; border-top: 1px solid var(--border); max-height: 200px; overflow-y: auto; }
+  .raw-tab-content.active { display: block; }
+
+  /* Layer 2 safety */
+  .safety-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; padding: 18px; }
+  .safety-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
+  .safety-item { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .safety-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot-green { background: var(--green); }
+  .dot-red   { background: var(--red); }
+  .dot-gray  { background: var(--muted); }
+  .strengths { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .strength-pill {
+    display: inline-block; padding: 2px 8px; margin: 2px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 999px; font-size: 11px;
+  }
+  .strength-pill.match { border-color: var(--green); color: var(--green); }
+  .impossibility-msg {
+    margin-top: 12px; padding: 12px 16px; border-radius: 8px;
+    background: #450a0a; border: 1px solid #7f1d1d;
+    color: #fca5a5; font-size: 13px; line-height: 1.5;
+  }
+
+  /* AI Summary card */
+  .summary-card {
+    background: linear-gradient(135deg, #0f1f3d 0%, #1a2540 100%);
+    border: 1px solid #2e4a80; border-radius: 14px;
+    padding: 20px 24px; margin-bottom: 24px;
+    position: relative; overflow: hidden;
+  }
+  .summary-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #4f8ef7, #22c55e, #4f8ef7);
+    background-size: 200% 100%; animation: shimmer 3s linear infinite;
+  }
+  @keyframes shimmer { to { background-position: 200% 0; } }
+  .summary-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+  }
+  .summary-icon { font-size: 20px; }
+  .summary-title { font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.5px; color: #4f8ef7; }
+  .summary-model { margin-left: auto; font-size: 11px; color: var(--muted);
+    background: var(--surface2); padding: 2px 8px; border-radius: 4px; }
+  .summary-text {
+    font-size: 15px; line-height: 1.7; color: #e2e8f0;
+    font-weight: 400;
+  }
+  .summary-text strong { color: #93c5fd; }
+
+  /* Raw JSON toggle */
+  .json-toggle { cursor: pointer; color: var(--accent); font-size: 12px; margin-top: 8px; display: inline-block; }
+  .json-block {
+    display: none; margin-top: 8px; background: #0a0c14; border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; font-family: var(--mono); font-size: 11px;
+    line-height: 1.6; overflow-x: auto; white-space: pre; color: #94a3b8;
+    max-height: 300px; overflow-y: auto;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">Med<span>Pipeline</span></div>
+    <div class="sub">OCR Ensemble Inspector — Layer 1 + Layer 2</div>
+  </div>
+</header>
+
+<div class="main">
+
+  <!-- Drop zone -->
+  <div id="dropzone">
+    <div class="icon">🔬</div>
+    <h2>Upload a prescription label image</h2>
+    <p>PNG, JPG, JPEG — drag & drop or click to browse</p>
+    <input type="file" id="file-input" accept="image/*">
+    <label for="file-input" class="btn">Choose Image</label>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="spinner"></div>
+    <p style="color:var(--muted)">Running OCR ensemble + AI summary…</p>
+    <p style="color:var(--muted);font-size:12px;margin-top:6px">EasyOCR · Tesseract · RapidOCR · Mistral OCR · Claude Haiku</p>
+  </div>
+
+  <!-- Results -->
+  <div id="results">
+
+    <!-- Top row: image | merged | status -->
+    <div class="top-row">
+      <div class="card">
+        <div class="section-title">Input Image</div>
+        <img id="preview-img" src="" alt="preview">
+        <div style="margin-top:8px;font-size:12px;color:var(--muted)" id="filename-label"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Merged Prescription</div>
+        <div id="status-badge-wrap"></div>
+        <div id="merged-fields"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Overall Consensus</div>
+        <div id="consensus-ring" style="text-align:center;padding:16px 0">
+          <svg width="120" height="120" viewBox="0 0 120 120">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="10"/>
+            <circle id="consensus-arc" cx="60" cy="60" r="50" fill="none"
+              stroke="var(--accent)" stroke-width="10"
+              stroke-dasharray="314" stroke-dashoffset="314"
+              stroke-linecap="round" transform="rotate(-90 60 60)"
+              style="transition:stroke-dashoffset .8s ease"/>
+            <text id="consensus-pct" x="60" y="65" text-anchor="middle"
+              font-size="22" font-weight="700" fill="var(--text)">—</text>
+          </svg>
+        </div>
+        <div id="field-score-list" style="margin-top:4px"></div>
+      </div>
+    </div>
+
+    <!-- Engine cards -->
+    <div class="section-title">Individual Engine Results</div>
+    <div class="engines-grid" id="engine-cards"></div>
+
+    <!-- Cross-check table -->
+    <div class="section-title">Field-Level Cross-Check</div>
+    <div class="xcheck-card">
+      <table id="xcheck-table">
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th id="xcheck-header-votes">Votes</th>
+            <th>Pairwise Agreement</th>
+            <th>Score</th>
+            <th>Merged Value</th>
+            <th>Confidence</th>
+          </tr>
+        </thead>
+        <tbody id="xcheck-body"></tbody>
+      </table>
+    </div>
+
+
+    <div id="merged-text-section"></div>
+
+    <!-- Layer 2 safety -->
+    <div id="safety-section"></div>
+
+    <!-- AI Summary -->
+    <div id="summary-section"></div>
+
+  </div><!-- /results -->
+</div><!-- /main -->
+
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) upload(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) upload(fileInput.files[0]); });
+
+async function upload(file) {
+  dropzone.style.display = 'none';
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('results').style.display = 'none';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch('/api/analyze', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    const data = await res.json();
+    render(data);
+  } catch (err) {
+    document.getElementById('loading').style.display = 'none';
+    dropzone.style.display = 'block';
+    alert('Error: ' + err.message);
+  }
+}
+
+function confClass(v) {
+  if (v >= 0.95) return 'conf-high';
+  if (v >= 0.67) return 'conf-mid';
+  return 'conf-low';
+}
+function relColor(v) {
+  if (v >= 0.95) return '#22c55e';
+  if (v >= 0.70) return '#f59e0b';
+  return '#ef4444';
+}
+function scoreColor(v) {
+  if (v >= 1.0) return '#22c55e';
+  if (v >= 0.67) return '#f59e0b';
+  return '#ef4444';
+}
+
+function render(d) {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('results').style.display = 'block';
+
+  // ── AI Summary ────────────────────────────────────────────────────────────
+  renderSummary(d.rx_summary);
+
+  // ── Preview ──────────────────────────────────────────────────────────────
+  document.getElementById('preview-img').src = d.image_preview;
+  document.getElementById('filename-label').textContent = d.filename || '';
+
+
+  // ── Status badge ─────────────────────────────────────────────────────────
+  const merged = d.merged;
+  const statusWrap = document.getElementById('status-badge-wrap');
+  const statusClass = merged.status === 'passed'
+    ? 'status-passed'
+    : merged.status === 'majority_passed'
+    ? 'status-recapture'   // yellow — majority but not unanimous
+    : 'status-recapture';
+  const statusIcon = merged.status === 'passed' ? '✓' : merged.status === 'majority_passed' ? '⚡' : '⚠';
+  const statusText = merged.status === 'passed'
+    ? 'Unanimous (3/3 engines)'
+    : merged.status === 'majority_passed'
+    ? 'Majority (2/3 engines) — reduced confidence'
+    : 'Recapture Required';
+  statusWrap.innerHTML = `<div class="status-badge ${statusClass}">${statusIcon} ${statusText}</div>`;
+
+  // ── Merged fields ─────────────────────────────────────────────────────────
+  const mf = document.getElementById('merged-fields');
+  const rx = merged.prescription;
+  const cc = d.cross_check;
+  const fieldLabels = { medication_name:'Drug', dose_value:'Dose', dose_unit:'Unit', frequency:'Frequency' };
+  mf.innerHTML = Object.entries(fieldLabels).map(([k, label]) => {
+    const val = rx[k] ?? '—';
+    const conf = cc[k]?.confidence ?? 0;
+    return `<div class="merged-field">
+      <span class="label">${label}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="value">${val}</span>
+        <span class="conf ${confClass(conf)}">${(conf*100).toFixed(0)}%</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── Consensus ring ───────────────────────────────────────────────────────
+  const score = merged.overall_consensus_score;
+  const arc = document.getElementById('consensus-arc');
+  const pctText = document.getElementById('consensus-pct');
+  const circumference = 314;
+  arc.setAttribute('stroke-dashoffset', circumference - circumference * score);
+  arc.setAttribute('stroke', scoreColor(score));
+  pctText.textContent = `${(score * 100).toFixed(0)}%`;
+
+  const fieldList = document.getElementById('field-score-list');
+  fieldList.innerHTML = Object.entries(cc).map(([f, v]) => {
+    const s = v.agreement_score;
+    const w = (s * 100).toFixed(0);
+    return `<div style="margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
+        <span>${f.replace('_',' ')}</span><span style="color:${scoreColor(s)}">${w}%</span>
+      </div>
+      <div class="rel-bar"><div class="rel-fill" style="width:${w}%;background:${scoreColor(s)}"></div></div>
+    </div>`;
+  }).join('');
+
+  // ── Engine cards ──────────────────────────────────────────────────────────
+  const engineGrid = document.getElementById('engine-cards');
+  const rel = d.reliability || {};
+  engineGrid.innerHTML = Object.entries(d.engines).map(([name, eng]) => {
+    const available = eng.available;
+    const isSoftFail = available && (d.soft_failed_engines || []).includes(name);
+    const badgeClass = isSoftFail ? 'badge-na'
+      : available ? 'badge-ok'
+      : (eng.error?.includes('token') || eng.error?.includes('not set') ? 'badge-na' : 'badge-err');
+    const badgeText = isSoftFail ? 'NO DATA'
+      : available ? 'ONLINE'
+      : (eng.error?.includes('token') || eng.error?.includes('not set') ? 'NO TOKEN' : 'ERROR');
+
+    const relData = rel[name];
+    const relPct = relData ? (relData.overall * 100).toFixed(0) : null;
+    const relGrade = relData?.grade ?? '—';
+    const relCol = relData ? relColor(relData.overall) : 'var(--muted)';
+
+    const fields = eng.fields || {};
+    const fieldRows = ['medication_name','dose_value','dose_unit','frequency','patient_name','prescriber'].map(k => {
+      const v = fields[k];
+      return `<div class="ef-row"><span class="ef-key">${k.replace(/_/g,' ')}</span>
+        <span class="ef-val" style="color:${v ? 'var(--text)' : 'var(--muted)'}">${v ?? '—'}</span></div>`;
+    }).join('');
+
+    const relBar = relPct !== null ? `
+      <div class="rel-bar-wrap">
+        <div class="rel-label"><span>Reliability</span><span style="color:${relCol}">${relGrade} · ${relPct}%</span></div>
+        <div class="rel-bar"><div class="rel-fill" style="width:${relPct}%;background:${relCol}"></div></div>
+      </div>` : '';
+
+    const errBlock = isSoftFail
+      ? `<div style="color:var(--yellow);font-size:12px;margin-top:8px;padding:8px;background:#1c1500;border:1px solid #713f12;border-radius:6px">
+           ⚠ Engine ran but returned no data for this image.<br>
+           Excluded from consensus — other engines still voted.
+         </div>`
+      : eng.error
+        ? `<div style="color:var(--muted);font-size:12px;margin-top:8px;padding:8px;background:#0a0c14;border-radius:6px">${eng.error}</div>`
+        : '';
+
+    const rawToggle = `<span class="json-toggle" onclick="toggleJson(this)">▶ raw text</span>
+      <div class="json-block">${escHtml(eng.raw_text || '(empty)')}</div>`;
+
+    return `<div class="engine-card">
+      <div class="engine-header">
+        <span class="engine-name">${name}</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${available ? `<span style="font-size:11px;color:var(--muted)">${eng.latency_ms}ms</span>` : ''}
+          <span class="engine-badge ${badgeClass}">${badgeText}</span>
+        </div>
+      </div>
+      <div class="engine-body">
+        ${available ? fieldRows : errBlock}
+        ${relBar}
+        ${available ? rawToggle : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // ── Cross-check table ─────────────────────────────────────────────────────
+  const tbody = document.getElementById('xcheck-body');
+  tbody.innerHTML = Object.entries(cc).map(([field, fc]) => {
+    const votesHtml = Object.entries(fc.votes).map(([e,v]) =>
+      `<div style="font-size:12px"><span style="color:var(--muted)">${e}:</span> <strong>${v ?? '—'}</strong></div>`
+    ).join('');
+
+    const pairsHtml = Object.entries(fc.pairwise).map(([pair, agreed]) =>
+      `<span class="agree-chip agree-${agreed}">${pair.replace(/_vs_/, ' ↔ ')} ${agreed ? '✓' : '✗'}</span> `
+    ).join('');
+
+    const s = fc.agreement_score;
+    const scoreHtml = `<span class="score-circle" style="color:${scoreColor(s)};border-color:${scoreColor(s)}">${(s*100).toFixed(0)}%</span>`;
+    const confHtml = `<span class="conf ${confClass(fc.confidence)}">${(fc.confidence*100).toFixed(0)}%</span>`;
+
+    return `<tr>
+      <td><strong>${field.replace(/_/g,' ')}</strong></td>
+      <td>${votesHtml}</td>
+      <td>${pairsHtml || '<span style="color:var(--muted);font-size:12px">single engine</span>'}</td>
+      <td>${scoreHtml}</td>
+      <td><strong>${fc.merged_value ?? '—'}</strong></td>
+      <td>${confHtml}</td>
+    </tr>`;
+  }).join('');
+
+  // ── FDA drug-name lookup result ───────────────────────────────────────────
+  const fda = d.fda_name_lookup || {};
+  if (fda.validated_name) {
+    const conf = fda.confidence || 0;
+    const color = conf >= 0.9 ? 'var(--green)' : conf >= 0.7 ? 'var(--yellow)' : 'var(--red)';
+    const fdaBanner = document.createElement('div');
+    fdaBanner.style.cssText = `background:#1a1d27;border:1px solid ${color};border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px`;
+    fdaBanner.innerHTML = `
+      <span style="font-size:13px;font-weight:700;color:var(--accent)">FDA</span>
+      <div>
+        <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">FDA Cross-Reference</div>
+        <div style="font-size:16px;font-weight:700;color:${color};margin-top:2px">${fda.validated_name}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Match confidence: ${(conf*100).toFixed(0)}%  ·  Candidates checked: ${(fda.candidates_checked||[]).join(', ')}</div>
+      </div>`;
+    document.getElementById('results').insertBefore(fdaBanner, document.getElementById('engine-cards'));
+  }
+
+  // ── Merged corrected text ─────────────────────────────────────────────────
+  const mts = document.getElementById('merged-text-section');
+  const mergedText = d.merged?.merged_text || '';
+  const rawTexts   = d.merged?.raw_texts || {};
+
+  // Colour disputed tokens in the merged text
+  const coloredText = escHtml(mergedText)
+    .replace(/\[disputed\]/g, '<span class="disputed">[disputed ⚠]</span>')
+    .replace(/(VERIFIED PRESCRIPTION)/g, '<span class="verified">$1</span>');
+
+  // Raw text tabs (one per engine that returned text)
+  const tabIds = Object.keys(rawTexts);
+  const tabButtons = tabIds.map((name, i) =>
+    `<span class="raw-tab ${i===0?'active':''}" onclick="switchRawTab(this,'raw-${name}')">${name}</span>`
+  ).join('');
+  const tabPanels = tabIds.map((name, i) =>
+    `<div id="raw-${name}" class="raw-tab-content ${i===0?'active':''}">${escHtml(rawTexts[name] || '(empty)')}</div>`
+  ).join('');
+
+  mts.innerHTML = `
+    <div class="section-title">Merged &amp; Corrected OCR Output</div>
+    <div class="merged-text-card">
+      <div class="merged-text-header">
+        <span style="font-size:13px;font-weight:600">Cross-validated prescription — consensus values only</span>
+        <span class="conf ${d.merged.all_unanimous ? 'conf-high' : 'conf-mid'}" style="font-size:12px">
+          ${d.merged.all_unanimous ? '✓ Unanimous' : '⚠ Disputed'}
+        </span>
+      </div>
+      <div class="merged-text-body">
+        <div class="mtext-col">
+          <div class="mtext-label">Verified Output</div>
+          <pre class="mtext-pre">${coloredText}</pre>
+        </div>
+        <div class="mtext-col">
+          <div class="mtext-label">Field Confidence</div>
+          ${Object.entries(d.cross_check).map(([f, fc]) => `
+            <div style="margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+                <span style="color:var(--muted)">${f.replace(/_/g,' ')}</span>
+                <span style="font-weight:600;color:${scoreColor(fc.agreement_score)}">${fc.merged_value ?? '—'}</span>
+              </div>
+              <div class="rel-bar"><div class="rel-fill" style="width:${fc.agreement_score*100}%;background:${scoreColor(fc.agreement_score)}"></div></div>
+            </div>`).join('')}
+        </div>
+      </div>
+      ${tabIds.length ? `
+      <div class="raw-tabs"><span style="font-size:11px;color:var(--muted);margin-right:4px">Raw OCR:</span>${tabButtons}</div>
+      ${tabPanels}` : ''}
+    </div>`;
+
+  // ── Layer 2 safety ────────────────────────────────────────────────────────
+  const ss = document.getElementById('safety-section');
+  const s2 = d.layer2_safety;
+  if (!s2) {
+    ss.innerHTML = `<div class="section-title">Layer 2 — Safety Vault</div>
+      <div class="safety-card" style="color:var(--muted);font-size:13px">
+        Safety check could not run — no drug name was identified by any engine or FDA lookup.
+      </div>`;
+    return;
+  }
+  if (s2.error) {
+    ss.innerHTML = `<div class="section-title">Layer 2 — Safety Vault</div>
+      <div class="safety-card" style="color:var(--red);font-size:13px">Error: ${s2.error}</div>`;
+    return;
+  }
+
+  const reducedConfWarn = s2.reduced_confidence
+    ? `<div style="margin-bottom:10px;padding:8px 12px;background:#2d2506;border:1px solid #ca8a04;border-radius:6px;font-size:12px;color:#fcd34d">
+        ⚡ <strong>Reduced confidence</strong> — only 2 of 3 OCR engines agreed. Safety check ran but result should be reviewed by a clinician.
+       </div>`
+    : '';
+  const overallStatus = s2.clinical_impossibility
+    ? '<div class="status-badge status-blocked">⛔ Clinical Impossibility</div>'
+    : s2.passed
+      ? `<div class="status-badge ${s2.reduced_confidence ? 'status-recapture' : 'status-passed'}">${s2.reduced_confidence ? '⚡' : '✓'} Safety Check ${s2.reduced_confidence ? 'Passed (2/3 confidence)' : 'Passed'}</div>`
+      : '<div class="status-badge status-recapture">⚠ Drug Not Verified</div>';
+
+  const checks = [
+    { label: 'Drug found in FDA/DailyMed', ok: s2.medication_verified },
+    { label: 'Dose verified against known strengths', ok: s2.dose_verified },
+    { label: 'OpenFDA hit', ok: s2.openfda_hit },
+    { label: 'DailyMed hit', ok: s2.dailymed_hit },
+  ];
+  const checksHtml = checks.map(c =>
+    `<div class="safety-item">
+      <div class="dot ${c.ok ? 'dot-green' : 'dot-red'}"></div>
+      <span>${c.label}</span>
+    </div>`
+  ).join('');
+
+  const extractedDose = s2.extracted_dose_label ? `<div style="font-size:13px;margin-top:10px">Extracted dose: <strong>${s2.extracted_dose_label}</strong></div>` : '';
+
+  const strengthsHtml = '';   // known strengths removed from summary per user request
+
+  const impossHtml = s2.clinical_impossibility && s2.impossibility_reason
+    ? `<div class="impossibility-msg">⛔ ${s2.impossibility_reason}</div>` : '';
+
+  ss.innerHTML = `
+    <div class="section-title">Layer 2 — Safety Vault (NIH DailyMed + OpenFDA)</div>
+    <div class="safety-card">
+      ${reducedConfWarn}
+      ${overallStatus}
+      <div class="safety-grid">${checksHtml}</div>
+      ${extractedDose}
+      ${strengthsHtml}
+      ${impossHtml}
+    </div>`;
+}
+
+function switchRawTab(btn, panelId) {
+  btn.closest('.merged-text-card').querySelectorAll('.raw-tab').forEach(t => t.classList.remove('active'));
+  btn.closest('.merged-text-card').querySelectorAll('.raw-tab-content').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId)?.classList.add('active');
+}
+
+function toggleJson(el) {
+  const block = el.nextElementSibling;
+  const open = block.style.display === 'block';
+  block.style.display = open ? 'none' : 'block';
+  el.textContent = (open ? '▶' : '▼') + ' raw text';
+}
+function renderSummary(summary) {
+  const el = document.getElementById('summary-section');
+  if (!summary || !summary.text) {
+    el.innerHTML = '';
+    return;
+  }
+  // Bold the drug name if it appears near the start
+  const text = summary.text.replace(
+    /\b([A-Z][a-z]+(?:\s+\d+\s*mg)?)\b/g,
+    (m, p) => p.length > 4 ? `<strong>${p}</strong>` : m
+  );
+  el.innerHTML = `
+    <div class="summary-card">
+      <div class="summary-header">
+        <span class="summary-icon">🤖</span>
+        <span class="summary-title">Clinical Summary</span>
+        <span class="summary-model">${summary.model || 'claude-haiku'}</span>
+      </div>
+      <div class="summary-text">${summary.text}</div>
+    </div>`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Reset button (click logo)
+document.querySelector('header').addEventListener('dblclick', () => {
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('dropzone').style.display = 'block';
+  document.getElementById('file-input').value = '';
+});
+</script>
+</body>
+</html>

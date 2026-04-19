@@ -5,6 +5,7 @@ import type { PipelineStep, StreamEvent } from '@/lib/types';
 const STEPS: { key: PipelineStep; label: string; description: string; icon: string }[] = [
   { key: 'simplify',      label: 'Reading instruction',       icon: 'auto_fix_high',    description: 'Expanding abbreviations and flagging ambiguous terms' },
   { key: 'translate',     label: 'Translating',               icon: 'translate',        description: 'Converting to the target language' },
+  { key: 'tonalRail',    label: 'Checking tone marks',        icon: 'spellcheck',       description: 'Verifying Yoruba numeral diacritics with mT5 ADR' },
   { key: 'backTranslate', label: 'Re-reading the translation', icon: 'sync_alt',        description: 'Translating back to English to check for changes' },
   { key: 'extractSource', label: 'Parsing original',          icon: 'data_object',      description: 'Pulling out dosage, frequency, and warnings from the source' },
   { key: 'extractBack',   label: 'Parsing re-read version',   icon: 'data_object',      description: 'Pulling out the same fields from the re-read version' },
