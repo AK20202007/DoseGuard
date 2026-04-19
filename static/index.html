@@ -331,9 +331,17 @@ function render(d) {
   // ── Status badge ─────────────────────────────────────────────────────────
   const merged = d.merged;
   const statusWrap = document.getElementById('status-badge-wrap');
-  const statusClass = merged.status === 'passed' ? 'status-passed' : 'status-recapture';
-  const statusIcon  = merged.status === 'passed' ? '✓' : '⚠';
-  const statusText  = merged.status === 'passed' ? 'Unanimous Consensus' : 'Recapture Required';
+  const statusClass = merged.status === 'passed'
+    ? 'status-passed'
+    : merged.status === 'majority_passed'
+    ? 'status-recapture'   // yellow — majority but not unanimous
+    : 'status-recapture';
+  const statusIcon = merged.status === 'passed' ? '✓' : merged.status === 'majority_passed' ? '⚡' : '⚠';
+  const statusText = merged.status === 'passed'
+    ? 'Unanimous (3/3 engines)'
+    : merged.status === 'majority_passed'
+    ? 'Majority (2/3 engines) — reduced confidence'
+    : 'Recapture Required';
   statusWrap.innerHTML = `<div class="status-badge ${statusClass}">${statusIcon} ${statusText}</div>`;
 
   // ── Merged fields ─────────────────────────────────────────────────────────
@@ -529,10 +537,15 @@ function render(d) {
     return;
   }
 
+  const reducedConfWarn = s2.reduced_confidence
+    ? `<div style="margin-bottom:10px;padding:8px 12px;background:#2d2506;border:1px solid #ca8a04;border-radius:6px;font-size:12px;color:#fcd34d">
+        ⚡ <strong>Reduced confidence</strong> — only 2 of 3 OCR engines agreed. Safety check ran but result should be reviewed by a clinician.
+       </div>`
+    : '';
   const overallStatus = s2.clinical_impossibility
     ? '<div class="status-badge status-blocked">⛔ Clinical Impossibility</div>'
     : s2.passed
-      ? '<div class="status-badge status-passed">✓ Safety Check Passed</div>'
+      ? `<div class="status-badge ${s2.reduced_confidence ? 'status-recapture' : 'status-passed'}">${s2.reduced_confidence ? '⚡' : '✓'} Safety Check ${s2.reduced_confidence ? 'Passed (2/3 confidence)' : 'Passed'}</div>`
       : '<div class="status-badge status-recapture">⚠ Drug Not Verified</div>';
 
   const checks = [
@@ -566,6 +579,7 @@ function render(d) {
   ss.innerHTML = `
     <div class="section-title">Layer 2 — Safety Vault (NIH DailyMed + OpenFDA)</div>
     <div class="safety-card">
+      ${reducedConfWarn}
       ${overallStatus}
       <div class="safety-grid">${checksHtml}</div>
       ${extractedDose}

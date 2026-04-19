@@ -46,7 +46,9 @@ def _get_engines():
         _engines["moondream"]  = MoondreamEngine()   # free, local via Ollama
     return _engines
 
-CRITICAL_FIELDS = ("medication_name", "dose_value", "dose_unit", "frequency")
+CRITICAL_FIELDS = ("medication_name", "dose_value", "dose_unit")
+SECONDARY_FIELDS = ("frequency",)
+CONSENSUS_MINIMUM = 2 / 3   # 2 of 3 engines must agree to proceed
 
 def _norm(val):
     if val is None:
@@ -120,12 +122,11 @@ async def analyze(file: UploadFile = File(...)):
     cross_check: dict[str, dict] = {}
     merged_fields: dict[str, Any] = {}
 
-    for field in CRITICAL_FIELDS:
+    for field in list(CRITICAL_FIELDS) + list(SECONDARY_FIELDS):
         votes = {
             n: _norm((r["fields"] or {}).get(field))
             for n, r in available.items()
         }
-        # Pairwise
         pairs: dict[str, bool] = {}
         for ea, eb in combinations(available.keys(), 2):
             va, vb = votes.get(ea), votes.get(eb)
@@ -147,9 +148,18 @@ async def analyze(file: UploadFile = File(...)):
             "confidence":      confidence,
         }
 
-    scores = [cross_check[f]["agreement_score"] for f in CRITICAL_FIELDS]
-    overall_consensus = round(min(scores) if scores else 0.0, 4)
+    critical_scores = [cross_check[f]["agreement_score"] for f in CRITICAL_FIELDS]
+    overall_consensus = round(min(critical_scores) if critical_scores else 0.0, 4)
     all_unanimous = all(cross_check[f]["unanimous"] for f in CRITICAL_FIELDS)
+    majority_reached = overall_consensus >= CONSENSUS_MINIMUM   # 2/3 threshold
+
+    # Confidence tier
+    if all_unanimous:
+        confidence_tier = "unanimous_3_of_3"
+    elif majority_reached:
+        confidence_tier = "majority_2_of_3"
+    else:
+        confidence_tier = "recapture_required"
 
     # ── FDA drug-name cross-reference ─────────────────────────────────────────
     # Collect every capitalized word from all engines' raw text, query OpenFDA,
@@ -191,8 +201,10 @@ async def analyze(file: UploadFile = File(...)):
         }
 
     # ── Layer 2 safety check ─────────────────────────────────────────────────
+    # Runs when at least 2/3 engines agree (majority). When only 2 agree,
+    # the result is flagged with reduced_confidence=True.
     safety_result = None
-    if all_unanimous and merged_fields.get("medication_name"):
+    if majority_reached and merged_fields.get("medication_name"):
         try:
             dose_str = merged_fields.get("dose_value")
             dose_val = float(dose_str) if dose_str else None
@@ -227,6 +239,8 @@ async def analyze(file: UploadFile = File(...)):
                 "known_strengths":         [s.label for s in safety.known_strengths[:12]],
                 "openfda_hit":             safety.openfda_hit,
                 "dailymed_hit":            safety.dailymed_hit,
+                "reduced_confidence":      not all_unanimous,
+                "confidence_tier":         confidence_tier,
             }
         except Exception as exc:
             safety_result = {"error": str(exc)}
@@ -273,7 +287,9 @@ async def analyze(file: UploadFile = File(...)):
             "prescription": merged_fields,
             "overall_consensus_score": overall_consensus,
             "all_unanimous": all_unanimous,
-            "status": "passed" if all_unanimous else "recapture_required",
+            "majority_reached": majority_reached,
+            "confidence_tier": confidence_tier,
+            "status": "passed" if all_unanimous else ("majority_passed" if majority_reached else "recapture_required"),
             "merged_text": merged_text,
             "raw_texts": raw_texts,
         },

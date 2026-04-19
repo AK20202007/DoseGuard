@@ -40,25 +40,38 @@ _SKIP_WORDS = {
     # Administrative / packaging
     "rx", "prescription", "patient", "name", "date", "dob", "refill",
     "qty", "quantity", "dispensed", "pharmacy", "pharmacist",
-    # Dosage-form words (these label the form, not the drug)
+    # Dosage-form words
     "tablets", "tablet", "capsules", "capsule", "syrup", "solution",
     "injection", "injectable", "suspension", "drops", "cream", "ointment",
     "inhaler", "patch", "gel", "powder", "vial", "ampoule", "ampule",
     "film", "coated", "modified", "release", "extended", "delayed",
     "oral", "topical", "intravenous", "intramuscular", "subcutaneous",
     "ophthalmic", "otic", "nasal", "rectal", "vaginal",
-    # Pharmacopoeia / regulatory suffixes
+    # Pharmacopoeia / regulatory
     "usp", "nf", "ip", "bp", "ep", "ph", "eur", "who", "gmp",
-    # Common filler
-    "for", "use", "only", "store", "keep", "below", "above",
+    # Frequency / timing words (must not be mistaken for drug names)
+    "once", "twice", "daily", "weekly", "monthly", "bedtime", "needed",
+    "morning", "evening", "night", "before", "after", "meals", "food",
+    # Common label filler
+    "for", "use", "only", "store", "keep", "below", "above", "room",
     "each", "contains", "caution", "warning", "sterile", "mucolytic",
     "expectorant", "antibiotic", "aminoglycoside", "control", "uric",
     "acid", "see", "insert", "package", "leaflet", "information",
-    # Numbers / misc
-    "one", "two", "three", "four", "film", "coated",
-    # Brand-agnostic qualifiers
-    "brand", "generic", "registered", "trademark", "pharmaceuticals",
-    "pharma", "healthcare", "laboratory", "laboratories",
+    "temperature", "light", "moisture", "children", "away", "reach",
+    "dispense", "original", "container", "protect", "refrigerate",
+    "shake", "well", "before", "using", "discard", "unused",
+    # Salt/ester modifiers — not the active drug name
+    "hydrochloride", "hcl", "sodium", "potassium", "calcium", "magnesium",
+    "sulfate", "sulphate", "phosphate", "succinate", "maleate", "tartrate",
+    "acetate", "citrate", "besylate", "mesylate", "fumarate", "valerate",
+    "bromide", "chloride", "nitrate", "oxide", "hydroxide", "gluconate",
+    # Company / brand qualifiers
+    "brand", "generic", "registered", "trademark",
+    "pharmaceuticals", "pharma", "healthcare", "laboratory", "laboratories",
+    "industries", "limited", "pvt", "ltd", "inc", "corp", "company",
+    "manufacturing", "manufacturers", "formulations", "enterprises",
+    # Numeric words
+    "one", "two", "three", "four", "five", "six",
 }
 
 # Pharmaceutical name suffixes that indicate a real drug name
@@ -146,64 +159,79 @@ def extract_medication_name(text: str) -> Optional[str]:
     """
     Multi-strategy medication name extractor.
 
-    Priority order:
-      1. Word immediately BEFORE a dose  (e.g. "Lisinopril 10 mg")
-      2. Word immediately AFTER a dose   (e.g. "125 mg\\nAbatacept")
-      3. Word near a dosage-form keyword (e.g. "Acetazolamide Tablets")
-      4. Word after generic-name markers (e.g. "(Abatacept)", "Generic: X")
-      5. Best-scored standalone candidate from all title-case / ALL-CAPS words
+    Priority order (generic name preferred over brand name):
+      1. Word AFTER a dosage-form phrase on the same/next line
+         ("Solution for injection\\nAbatacept" → Abatacept)
+      2. Parenthesised generic name  ("(Abatacept)" → Abatacept)
+      3. Word immediately AFTER a dose  ("125 mg\\nAbatacept" → Abatacept)
+      4. Word immediately BEFORE a dose ("ORENCIA 125 mg" → Orencia — brand fallback)
+      5. Word BEFORE dosage-form keyword ("Acetazolamide Tablets" → Acetazolamide)
+      6. Best-scored candidate from all prominent words
     """
-    # Strip ® ™ so they don't break word boundaries
     cleaned = re.sub(r"[®™©°]", " ", text)
 
-    # ── Strategy 1: word BEFORE dose ──────────────────────────────────────────
-    m = re.search(
-        r"\b([A-Za-z][A-Za-z0-9\-]{2,}(?:\s+[A-Za-z][A-Za-z0-9\-]{2,})?)\s+"
-        r"(?:\.?\d+(?:[.,]\d+)?\s*(?:mg|mcg|ml|g\b|meq|units?|iu|%))",
+    # ── Strategy 1: word AFTER dosage-form phrase ─────────────────────────────
+    # Catches "Solution for injection\nAbatacept", "Tablets IP\nDrugName"
+    form_after = re.search(
+        r"(?:solution\s+for\s+injection|solution\s+for\s+infusion|"
+        r"tablets?\s+(?:ip|bp|usp|nf|ep)?|capsules?\s+(?:bp|usp|ip)?|"
+        r"syrup|suspension|oral\s+drops?|injection|infusion|cream|ointment)"
+        r"[\s\n]+([A-Za-z][A-Za-z0-9\-]{3,})",
         cleaned, re.IGNORECASE,
     )
-    if m:
-        candidate = _best_token(m.group(1))
-        if candidate and not _is_skip(candidate):
-            return candidate.title()
-
-    # ── Strategy 2: word AFTER dose ───────────────────────────────────────────
-    m2 = re.search(
-        r"(?:\.?\d+(?:[.,]\d+)?\s*(?:mg|mcg|ml|g\b|meq|units?|iu))"
-        r"\s*[/\w\s]*?\n?\s*([A-Za-z][A-Za-z0-9\-]{3,})",
-        cleaned, re.IGNORECASE,
-    )
-    if m2:
-        candidate = _clean_word(m2.group(1))
+    if form_after:
+        candidate = _clean_word(form_after.group(1))
         if not _is_skip(candidate):
             return candidate.title()
 
-    # ── Strategy 3: word adjacent to dosage-form keywords ────────────────────
-    form_pat = re.compile(
-        r"([A-Za-z][A-Za-z0-9\-]{3,})\s+"
-        r"(?:tablets?|capsules?|syrup|solution|injection|suspension|drops?|"
-        r"cream|ointment|powder|gel|patch|spray|inhaler)\b",
-        re.IGNORECASE,
-    )
-    for fm in form_pat.finditer(cleaned):
-        candidate = _clean_word(fm.group(1))
-        if not _is_skip(candidate):
-            return candidate.title()
-
-    # ── Strategy 4: parenthesised generic name ────────────────────────────────
-    paren = re.search(r"\(([A-Za-z][A-Za-z0-9\-\s]{3,})\)", cleaned)
+    # ── Strategy 2: parenthesised generic name ────────────────────────────────
+    paren = re.search(r"\(([A-Za-z][A-Za-z0-9\-\s]{3,40})\)", cleaned)
     if paren:
         candidate = _clean_word(paren.group(1).strip().split()[0])
         if not _is_skip(candidate):
             return candidate.title()
 
-    # ── Strategy 5: best-scored candidate from all prominent words ────────────
+    # ── Strategy 3: word BEFORE dose ─────────────────────────────────────────
+    # Most reliable for well-formatted labels: "Lisinopril 10 mg"
+    m3 = re.search(
+        r"\b([A-Za-z][A-Za-z0-9\-]{2,}(?:\s+[A-Za-z][A-Za-z0-9\-]{2,})?)\s+"
+        r"(?:\.?\d+(?:[.,]\d+)?\s*(?:mg|mcg|ml|g\b|meq|units?|iu|%))",
+        cleaned, re.IGNORECASE,
+    )
+    if m3:
+        candidate = _best_token(m3.group(1))
+        if candidate and not _is_skip(candidate):
+            return candidate.title()
+
+    # ── Strategy 4: word BEFORE dosage-form keyword ───────────────────────────
+    # "Acetazolamide Tablets", "Acarbose Tablets IP"
+    form_before = re.search(
+        r"\b([A-Za-z][A-Za-z0-9\-]{3,})\s+"
+        r"(?:tablets?|capsules?|syrup|suspension|drops?|cream|ointment|"
+        r"powder|gel|patch|spray|inhaler|injection)\b",
+        cleaned, re.IGNORECASE,
+    )
+    if form_before:
+        candidate = _clean_word(form_before.group(1))
+        if not _is_skip(candidate):
+            return candidate.title()
+
+    # ── Strategy 5: word AFTER dose (last resort — grabs noise easily) ────────
+    m5 = re.search(
+        r"(?:\.?\d+(?:[.,]\d+)?\s*(?:mg|mcg|ml|g\b|meq|units?|iu))"
+        r"[\s\n]+([A-Za-z][A-Za-z0-9\-]{4,})",   # min 5 chars to skip "once"
+        cleaned, re.IGNORECASE,
+    )
+    if m5:
+        candidate = _clean_word(m5.group(1))
+        if not _is_skip(candidate):
+            return candidate.title()
+
+    # ── Strategy 6: best-scored candidate ────────────────────────────────────
     candidates: list[tuple[int, str]] = []
     for word in re.split(r"[\s\n]+", cleaned):
         c = _clean_word(word)
-        if _is_skip(c):
-            continue
-        if not re.match(r"^[A-Za-z]", c):
+        if _is_skip(c) or not re.match(r"^[A-Za-z]", c):
             continue
         if c[0].isupper() or c.isupper():
             candidates.append((_score_candidate(c), c))
