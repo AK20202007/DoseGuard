@@ -220,50 +220,66 @@ class DeterministicSafetyVault:
 
     async def _query_dailymed(self, drug_name: str) -> list[DrugStrength]:
         """
-        Search NIH DailyMed for drug names, then fetch SPL dosage form table.
-        https://dailymed.nlm.nih.gov/dailymed/services/v2/drugnames.json
+        Search NIH DailyMed for known drug strengths.
+
+        Correct API flow (v2):
+          1. GET /spls.json?drug_name=X          → returns records with setid
+          2. GET /spls/{setid}/packaging.json    → products[].active_ingredients[].strength
         """
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
-                # Step 1: find matching set IDs
+                # Step 1: search SPLs by drug name — this endpoint includes setid
                 r = await client.get(
-                    f"{_DAILYMED_URL}/drugnames.json",
+                    f"{_DAILYMED_URL}/spls.json",
                     params={"drug_name": drug_name, "pagesize": "10"},
                 )
                 r.raise_for_status()
-                drug_data = r.json()
+                spls_data = r.json()
 
                 set_ids = [
                     d["setid"]
-                    for d in drug_data.get("data", [])
+                    for d in spls_data.get("data", [])
                     if d.get("setid")
                 ]
                 if not set_ids:
                     return []
 
-                # Step 2: fetch product details for first matching SPL
-                set_id = set_ids[0]
-                r2 = await client.get(f"{_DAILYMED_URL}/spls/{set_id}.json")
-                r2.raise_for_status()
-                spl = r2.json()
+                # Step 2: fetch packaging for each SPL (up to 5) and collect strengths
+                strengths: list[DrugStrength] = []
+                seen: set[tuple] = set()
 
-            strengths: list[DrugStrength] = []
-            # DailyMed SPL product section contains dosage form info
-            products = spl.get("data", {}).get("products", [])
-            for product in products:
-                for strength_str in product.get("active_ingredient_unit", []):
-                    parsed = _parse_strength_label(strength_str)
-                    if parsed:
-                        v, u = parsed
-                        strengths.append(
-                            DrugStrength(
-                                value=v,
-                                unit=u,
-                                label=strength_str.strip().upper(),
-                                source="dailymed",
-                            )
-                        )
-            return strengths
+                for set_id in set_ids[:5]:
+                    r2 = await client.get(
+                        f"{_DAILYMED_URL}/spls/{set_id}/packaging.json"
+                    )
+                    if r2.status_code != 200:
+                        continue
+                    packaging_data = r2.json()
+                    products = packaging_data.get("data", {}).get("products", [])
+
+                    for product in products:
+                        for ingredient in product.get("active_ingredients", []):
+                            # Only keep strengths for the drug we searched for
+                            ing_name = ingredient.get("name", "").lower()
+                            if drug_name.lower() not in ing_name:
+                                continue
+                            strength_str: str = ingredient.get("strength", "")
+                            parsed = _parse_strength_label(strength_str)
+                            if parsed:
+                                v, u = parsed
+                                key = (v, u)
+                                if key not in seen:
+                                    seen.add(key)
+                                    strengths.append(
+                                        DrugStrength(
+                                            value=v,
+                                            unit=u,
+                                            label=strength_str.strip().upper(),
+                                            source="dailymed",
+                                        )
+                                    )
+
+                return strengths
         except Exception:
             return []
 
