@@ -94,12 +94,12 @@ export const DEMO_CASES: DemoCase[] = [
     id: 'negation-critical',
     label: 'Negation Safety',
     instruction:
-      'Do NOT crush or chew this tablet. Do NOT take on an empty stomach. Do NOT take with dairy products or antacids.',
-    targetLanguage: 'Haitian Creole',
+      'Do NOT grind or chew this tablet. Do NOT take on an empty stomach. Do NOT swallow with dairy products or antacids.',
+    targetLanguage: 'Yoruba',
     useSimplification: false,
     expectedRisk: 'high',
     description:
-      'Three critical negations in low-resource Haitian Creole. If "do not" becomes "take" in back-translation, the patient gets the opposite instruction.',
+      'Three critical negations in Yoruba. If "do not" becomes "take" in back-translation, the patient gets the opposite instruction.',
   },
 
   // ── Tier 5: Low-resource escalation ──────────────────────────────────────
