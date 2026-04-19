@@ -42,6 +42,17 @@ export type SimplificationResult = {
   is_ambiguous: boolean;
 };
 
+export type DiacriticIssue = {
+  bare: string;
+  canonical: string;
+  meaning: string;
+  confusableWith?: string;
+  confusableMeaning?: string;
+  severity: 'high' | 'medium';
+  category: 'numeral' | 'time' | 'frequency' | 'medical' | 'instruction';
+  context: string;
+};
+
 export type AnalysisResult = {
   originalInstruction: string;
   simplificationResult: SimplificationResult;
@@ -51,6 +62,7 @@ export type AnalysisResult = {
   sourceFields: MedicationFields;
   backTranslatedFields: MedicationFields;
   driftIssues: DriftIssue[];
+  diacriticIssues: DiacriticIssue[];
   riskScore: number;
   riskLevel: RiskLevel;
   riskExplanation: string;

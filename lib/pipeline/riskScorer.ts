@@ -1,4 +1,4 @@
-import type { DriftIssue, LanguageMetadata, RiskLevel, Recommendation } from '@/lib/types';
+import type { DriftIssue, DiacriticIssue, LanguageMetadata, RiskLevel, Recommendation } from '@/lib/types';
 
 const FIELD_WEIGHTS: Record<string, number> = {
   dosage_amount: 40,
@@ -29,10 +29,21 @@ export type RiskScoringResult = {
   recommendation: Recommendation;
 };
 
+// Diacritic issues on safety-critical categories contribute to score.
+// A missing tone mark on a numeral is as dangerous as a drift issue.
+const DIACRITIC_WEIGHTS: Record<DiacriticIssue['category'], number> = {
+  numeral: 30,
+  frequency: 25,
+  instruction: 20,
+  medical: 10,
+  time: 8,
+};
+
 export function scoreRisk(
   driftIssues: DriftIssue[],
   langMeta: LanguageMetadata,
   extractionFailed: boolean,
+  diacriticIssues: DiacriticIssue[] = [],
 ): RiskScoringResult {
   let score = 0;
   const keyExplanations: string[] = [];
@@ -42,6 +53,20 @@ export function scoreRisk(
     score += Math.round(weight * SEVERITY_MULTIPLIERS[issue.severity]);
     if (issue.severity === 'high' && keyExplanations.length < 2) {
       keyExplanations.push(issue.explanation);
+    }
+  }
+
+  for (const issue of diacriticIssues) {
+    const weight = DIACRITIC_WEIGHTS[issue.category] ?? 5;
+    const multiplier = issue.severity === 'high' ? 1.0 : 0.5;
+    score += Math.round(weight * multiplier);
+    if (issue.severity === 'high' && keyExplanations.length < 2) {
+      const confusable = issue.confusableWith
+        ? ` (could be misread as ${issue.confusableWith} = ${issue.confusableMeaning})`
+        : '';
+      keyExplanations.push(
+        `Missing tone marks on "${issue.bare}" (should be "${issue.canonical}" = ${issue.meaning})${confusable}.`,
+      );
     }
   }
 
@@ -70,14 +95,17 @@ export function scoreRisk(
         : 'human_review_required';
 
   let riskExplanation = '';
-  if (driftIssues.length === 0 && !langMeta.escalatesRisk && !extractionFailed) {
-    riskExplanation = 'No semantic drift detected between source and back-translation.';
+  const hasAnyIssue = driftIssues.length > 0 || diacriticIssues.length > 0 || langMeta.escalatesRisk || extractionFailed;
+  if (!hasAnyIssue) {
+    riskExplanation = 'No semantic drift or tonal integrity issues detected.';
   } else {
-    const highCount = driftIssues.filter(i => i.severity === 'high').length;
-    const medCount = driftIssues.filter(i => i.severity === 'medium').length;
+    const highDrift = driftIssues.filter(i => i.severity === 'high').length;
+    const medDrift = driftIssues.filter(i => i.severity === 'medium').length;
+    const highDiacritic = diacriticIssues.filter(i => i.severity === 'high').length;
     const parts: string[] = [];
-    if (highCount > 0) parts.push(`${highCount} high-severity drift issue${highCount > 1 ? 's' : ''}`);
-    if (medCount > 0) parts.push(`${medCount} medium-severity issue${medCount > 1 ? 's' : ''}`);
+    if (highDrift > 0) parts.push(`${highDrift} high-severity drift issue${highDrift > 1 ? 's' : ''}`);
+    if (medDrift > 0) parts.push(`${medDrift} medium-severity drift issue${medDrift > 1 ? 's' : ''}`);
+    if (highDiacritic > 0) parts.push(`${highDiacritic} missing tone mark${highDiacritic > 1 ? 's' : ''} on safety-critical word${highDiacritic > 1 ? 's' : ''}`);
     parts.push(...escalationNotes);
     riskExplanation = parts.join('; ');
     if (keyExplanations.length > 0) {

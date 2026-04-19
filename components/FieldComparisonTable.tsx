@@ -70,6 +70,10 @@ export function FieldComparisonTable({ sourceFields, backTranslatedFields, drift
   }
 
   return (
+    <div>
+      <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+        The translation was re-read back into English. Highlighted rows show where meaning changed — these are the fields most likely to cause a dosing error.
+      </p>
     <div className="overflow-x-auto -mx-4">
       <table className="w-full text-xs border-collapse min-w-[500px]">
         <thead>
@@ -78,10 +82,10 @@ export function FieldComparisonTable({ sourceFields, backTranslatedFields, drift
               Field
             </th>
             <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-wide w-[37.5%]">
-              Source
+              Original
             </th>
             <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-wide w-[37.5%]">
-              Back-Translation
+              After re-reading
             </th>
           </tr>
         </thead>
@@ -126,6 +130,7 @@ export function FieldComparisonTable({ sourceFields, backTranslatedFields, drift
           })}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }

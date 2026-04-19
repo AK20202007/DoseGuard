@@ -9,32 +9,33 @@ type Props = {
   isLoading: boolean;
 };
 
-const RECOMMENDATION_CONFIG = {
-  safe_to_use: {
-    label: 'Safe to Use',
-    description:
-      'No significant semantic drift detected. Translation appears safe for patient use.',
-    icon: '✓',
-    styles: 'bg-green-50 border-green-300 text-green-900',
-    iconColor: 'text-green-600',
-  },
-  use_with_caution: {
-    label: 'Use With Caution',
-    description:
-      'Minor drift detected. Review highlighted fields before patient use.',
-    icon: '⚠',
-    styles: 'bg-amber-50 border-amber-300 text-amber-900',
-    iconColor: 'text-amber-600',
-  },
-  human_review_required: {
-    label: 'Human Review Required',
-    description:
-      'Significant semantic drift or low-resource language detected. A clinician or qualified interpreter must review this translation before patient use.',
-    icon: '⛔',
-    styles: 'bg-red-50 border-red-300 text-red-900',
-    iconColor: 'text-red-600',
-  },
+const RECOMMENDATION_STYLES = {
+  safe_to_use:          { label: 'Safe to Use',           icon: '✓', styles: 'bg-green-50 border-green-300 text-green-900', iconColor: 'text-green-600' },
+  use_with_caution:     { label: 'Use With Caution',      icon: '⚠', styles: 'bg-amber-50 border-amber-300 text-amber-900', iconColor: 'text-amber-600' },
+  human_review_required:{ label: 'Human Review Required', icon: '⛔', styles: 'bg-red-50 border-red-300 text-red-900',       iconColor: 'text-red-600'   },
 };
+
+function getRecommendationDescription(result: AnalysisResult): string {
+  const hasDrift = result.driftIssues.length > 0 || (result.diacriticIssues?.length ?? 0) > 0;
+  const isLowResource = result.languageQualityWarning !== null;
+
+  switch (result.recommendation) {
+    case 'safe_to_use':
+      return 'No drift or tone mark issues detected. Translation appears safe for patient use.';
+
+    case 'use_with_caution':
+      if (!hasDrift && isLowResource)
+        return `No errors were found in this translation, but ${result.targetLanguage} is a low-resource language with limited machine translation quality. Have a qualified interpreter review it before giving to the patient.`;
+      if (hasDrift && isLowResource)
+        return `Errors were found and ${result.targetLanguage} is a low-resource language. Review all highlighted fields and have a qualified interpreter confirm the translation.`;
+      return 'Minor differences found between the original and re-read versions. Review the highlighted fields below before patient use.';
+
+    case 'human_review_required':
+      if (!hasDrift && isLowResource)
+        return `No drift was detected, but ${result.targetLanguage} is a low-resource language where machine translation is unreliable. A clinician or certified interpreter must review this before patient use.`;
+      return 'Significant differences were found between the original and the re-read version. A clinician or certified interpreter must review this translation before it is given to the patient.';
+  }
+}
 
 function SkeletonPanel() {
   return (
@@ -64,7 +65,8 @@ export function RiskPanel({ finalResult, isLoading }: Props) {
   if (!finalResult && isLoading) return <SkeletonPanel />;
   if (!finalResult) return <EmptyPanel />;
 
-  const rec = RECOMMENDATION_CONFIG[finalResult.recommendation];
+  const rec = RECOMMENDATION_STYLES[finalResult.recommendation];
+  const recDescription = getRecommendationDescription(finalResult);
 
   return (
     <div className="space-y-4">
@@ -118,35 +120,87 @@ export function RiskPanel({ finalResult, isLoading }: Props) {
           <span className={`text-base ${rec.iconColor}`}>{rec.icon}</span>
           <span className="text-sm font-bold">{rec.label}</span>
         </div>
-        <p className="text-xs leading-relaxed">{rec.description}</p>
+        <p className="text-xs leading-relaxed">{recDescription}</p>
       </div>
 
       {/* Drift Issues */}
       {finalResult.driftIssues.length > 0 && (
         <div className="bg-white rounded-lg border border-slate-200 p-4">
-          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-            Drift Issues ({finalResult.driftIssues.length})
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+            Translation Errors Found
           </h3>
+          <p className="text-xs text-slate-400 mb-3">These fields changed meaning when re-read in English.</p>
           <div className="space-y-2">
-            {finalResult.driftIssues.map((issue, i) => (
+            {finalResult.driftIssues.map((issue, i) => {
+              const typeLabel =
+                issue.type === 'value_changed' ? 'Number changed' :
+                issue.type === 'negation_changed' ? 'Warning reversed' :
+                issue.type === 'omitted' ? 'Missing from translation' :
+                'Meaning changed';
+              const severityLabel =
+                issue.severity === 'high' ? 'High risk' :
+                issue.severity === 'medium' ? 'Medium risk' : 'Low risk';
+              return (
+                <div
+                  key={i}
+                  className={`rounded border p-2.5 text-xs leading-relaxed ${
+                    issue.severity === 'high'
+                      ? 'bg-red-50 border-red-200 text-red-900'
+                      : issue.severity === 'medium'
+                        ? 'bg-amber-50 border-amber-200 text-amber-900'
+                        : 'bg-yellow-50 border-yellow-200 text-yellow-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                    <span className="font-bold text-xs">{severityLabel}</span>
+                    <span className="opacity-40">·</span>
+                    <span className="capitalize font-medium">{issue.field.replace(/_/g, ' ')}</span>
+                    <span className="opacity-40">·</span>
+                    <span>{typeLabel}</span>
+                  </div>
+                  <p>{issue.explanation}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Diacritic Issues (Yoruba only) */}
+      {finalResult.diacriticIssues && finalResult.diacriticIssues.length > 0 && (
+        <div className="bg-white rounded-lg border border-slate-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+            Yoruba Accent Marks Missing
+          </h3>
+          <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+            Yoruba uses accent marks to change meaning. A missing mark on a number can make "three" look like "six" — a direct dose risk.
+          </p>
+          <div className="space-y-2">
+            {finalResult.diacriticIssues.map((issue, i) => (
               <div
                 key={i}
                 className={`rounded border p-2.5 text-xs leading-relaxed ${
                   issue.severity === 'high'
                     ? 'bg-red-50 border-red-200 text-red-900'
-                    : issue.severity === 'medium'
-                      ? 'bg-amber-50 border-amber-200 text-amber-900'
-                      : 'bg-yellow-50 border-yellow-200 text-yellow-900'
+                    : 'bg-amber-50 border-amber-200 text-amber-900'
                 }`}
               >
                 <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                   <span className="font-bold uppercase text-xs">{issue.severity}</span>
                   <span className="opacity-50">·</span>
-                  <span className="font-mono">{issue.field.replace(/_/g, ' ')}</span>
+                  <span className="capitalize">{issue.category}</span>
                   <span className="opacity-50">·</span>
-                  <span className="capitalize">{issue.type.replace(/_/g, ' ')}</span>
+                  <span className="font-mono">{issue.bare}</span>
+                  <span className="opacity-40">→</span>
+                  <span className="font-mono font-semibold">{issue.canonical}</span>
+                  <span className="opacity-50">({issue.meaning})</span>
                 </div>
-                <p>{issue.explanation}</p>
+                {issue.confusableWith && (
+                  <p className="text-xs opacity-80">
+                    Could be misread as <span className="font-mono">{issue.confusableWith}</span> ({issue.confusableMeaning})
+                  </p>
+                )}
+                <p className="text-xs opacity-60 mt-0.5 font-mono truncate">…{issue.context}…</p>
               </div>
             ))}
           </div>

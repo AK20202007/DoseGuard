@@ -16,8 +16,8 @@ Rules:
 Extract into this exact JSON structure:
 {
   "medication_name": "name of medication, or null",
-  "dosage_amount": "numeric amount only (e.g. '500', '10', '2'), or null",
-  "dosage_unit": "unit only (e.g. 'mg', 'ml', 'tablet', 'tablets'), or null",
+  "dosage_amount": "the prescribed dose quantity — PREFER the measured amount (mg/ml/mcg value) over a tablet count. If text says '1 tablet 5mg' or '1 warfarin tablet (5mg)', extract '5' not '1'. Only extract a tablet count when no measured amount is given (e.g. '2 tablets' with no mg stated → '2'), or null",
+  "dosage_unit": "the dose unit — PREFER a measured unit (mg, ml, mcg) over 'tablet'/'capsule' when both are present in the same phrase. If text says '1 tablet 5mg', extract 'mg', or null",
   "frequency": "how often to take (e.g. 'twice daily', 'three times a day', 'once daily'), or null",
   "interval": "time between doses if specified (e.g. 'every 8 hours'), or null",
   "route": "administration route (e.g. 'oral', 'by mouth', 'sublingual'), or null",

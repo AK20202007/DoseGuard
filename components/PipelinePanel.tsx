@@ -99,7 +99,7 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
 
             {(backTranslateDone || finalResult.backTranslation) && (
               <TextBlock
-                label="Back-Translation → English"
+                label="Re-read in English (safety check)"
                 content={finalResult.backTranslation}
               />
             )}
@@ -107,7 +107,7 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
 
           <div className="bg-white rounded-lg border border-slate-200 p-4">
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">
-              Structured Field Comparison
+              Field-by-Field Safety Check
             </h2>
             <FieldComparisonTable
               sourceFields={finalResult.sourceFields}

@@ -2,14 +2,14 @@
 
 import type { PipelineStep, StreamEvent } from '@/lib/types';
 
-const STEPS: { key: PipelineStep; label: string }[] = [
-  { key: 'simplify', label: 'Source Analysis' },
-  { key: 'translate', label: 'Translation' },
-  { key: 'backTranslate', label: 'Back-Translation' },
-  { key: 'extractSource', label: 'Extract Source Fields' },
-  { key: 'extractBack', label: 'Extract Back-Translation Fields' },
-  { key: 'analyze', label: 'Drift Analysis & Risk Scoring' },
-  { key: 'teachBack', label: 'Teach-Back Question' },
+const STEPS: { key: PipelineStep; label: string; description: string }[] = [
+  { key: 'simplify', label: 'Reading instruction', description: 'Expanding abbreviations and flagging ambiguous terms' },
+  { key: 'translate', label: 'Translating', description: 'Converting to the target language' },
+  { key: 'backTranslate', label: 'Re-reading the translation', description: 'Translating back to English to check for changes' },
+  { key: 'extractSource', label: 'Parsing original', description: 'Pulling out dosage, frequency, warnings from the source' },
+  { key: 'extractBack', label: 'Parsing re-read', description: 'Pulling out the same fields from the re-read version' },
+  { key: 'analyze', label: 'Checking for errors', description: 'Comparing both versions field-by-field' },
+  { key: 'teachBack', label: 'Generating patient question', description: 'Creating a question to confirm the patient understood' },
 ];
 
 type Props = {
@@ -63,12 +63,12 @@ export function StepProgress({ steps, isLoading }: Props) {
         Pipeline Progress
       </h3>
       <div className="space-y-2">
-        {STEPS.map(({ key, label }) => {
+        {STEPS.map(({ key, label, description }) => {
           const event = steps.get(key);
           const status = event?.status ?? 'pending';
           return (
-            <div key={key} className="flex items-center gap-2.5">
-              <div className="w-5 h-5 flex-shrink-0">
+            <div key={key} className="flex items-start gap-2.5">
+              <div className="w-5 h-5 flex-shrink-0 mt-0.5">
                 {status === 'complete' ? (
                   <CheckIcon />
                 ) : status === 'running' ? (
@@ -79,19 +79,24 @@ export function StepProgress({ steps, isLoading }: Props) {
                   <div className="w-5 h-5 rounded-full border-2 border-slate-200" />
                 )}
               </div>
-              <span
-                className={`text-sm ${
-                  status === 'complete'
-                    ? 'text-slate-600'
-                    : status === 'running'
-                      ? 'text-blue-700 font-medium'
-                      : status === 'error'
-                        ? 'text-red-600'
-                        : 'text-slate-400'
-                }`}
-              >
-                {label}
-              </span>
+              <div>
+                <span
+                  className={`text-sm leading-tight block ${
+                    status === 'complete'
+                      ? 'text-slate-700'
+                      : status === 'running'
+                        ? 'text-blue-700 font-medium'
+                        : status === 'error'
+                          ? 'text-red-600'
+                          : 'text-slate-400'
+                  }`}
+                >
+                  {label}
+                </span>
+                {(status === 'running' || status === 'complete') && (
+                  <span className="text-xs text-slate-400 leading-tight">{description}</span>
+                )}
+              </div>
             </div>
           );
         })}

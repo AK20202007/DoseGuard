@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
 import { getLanguageMetadata } from '@/data/languages';
 import { simplifySource } from '@/lib/pipeline/sourceSimplifier';
-import { translateInstruction } from '@/lib/pipeline/translator';
+import { translateInstruction, correctDiacritics } from '@/lib/pipeline/translator';
 import { backTranslateInstruction } from '@/lib/pipeline/backTranslator';
 import { extractMedicationFields } from '@/lib/pipeline/semanticExtractor';
 import { analyzeDrift } from '@/lib/pipeline/driftAnalyzer';
+import { validateDiacritics } from '@/lib/pipeline/diacriticValidator';
 import { scoreRisk } from '@/lib/pipeline/riskScorer';
 import { generateTeachBack } from '@/lib/pipeline/teachBackGenerator';
 import { appendAuditLog } from '@/lib/auditLog';
@@ -40,9 +41,21 @@ export async function POST(request: NextRequest) {
             ? simplificationResult.rewritten
             : instruction;
 
-        // ── Step 2: Translation ───────────────────────────────────────────
+        // ── Step 2: Translation (+ Yoruba diacritic self-correction) ─────
         emit({ step: 'translate', status: 'running' });
-        const translation = await translateInstruction(effectiveSource, targetLanguage, langMeta);
+        let translation = await translateInstruction(effectiveSource, targetLanguage, langMeta);
+
+        if (targetLanguage === 'Yoruba' && translation) {
+          const initialIssues = validateDiacritics(translation);
+          const highIssues = initialIssues.filter(i => i.severity === 'high');
+          if (highIssues.length > 0) {
+            const corrected = await correctDiacritics(translation, highIssues);
+            if (corrected && validateDiacritics(corrected).length < initialIssues.length) {
+              translation = corrected;
+            }
+          }
+        }
+
         emit({ step: 'translate', status: 'complete', result: translation });
 
         // ── Step 3: Back-translation ──────────────────────────────────────
@@ -60,9 +73,12 @@ export async function POST(request: NextRequest) {
         emit({ step: 'extractSource', status: 'complete', result: sourceFields });
         emit({ step: 'extractBack', status: 'complete', result: backTranslatedFields });
 
-        // ── Step 6: Drift analysis + risk scoring ─────────────────────────
+        // ── Step 6: Drift analysis + diacritic validation + risk scoring ──
         emit({ step: 'analyze', status: 'running' });
         const driftIssues = analyzeDrift(sourceFields, backTranslatedFields);
+        const diacriticIssues = targetLanguage === 'Yoruba'
+          ? validateDiacritics(translation)
+          : [];
         const extractionFailed =
           sourceFields.medication_name === null &&
           sourceFields.dosage_amount === null &&
@@ -71,8 +87,9 @@ export async function POST(request: NextRequest) {
           driftIssues,
           langMeta,
           extractionFailed,
+          diacriticIssues,
         );
-        emit({ step: 'analyze', status: 'complete', result: { driftIssues, riskScore, riskLevel } });
+        emit({ step: 'analyze', status: 'complete', result: { driftIssues, diacriticIssues, riskScore, riskLevel } });
 
         // ── Step 7: Teach-back ────────────────────────────────────────────
         emit({ step: 'teachBack', status: 'running' });
@@ -93,6 +110,7 @@ export async function POST(request: NextRequest) {
           sourceFields,
           backTranslatedFields,
           driftIssues,
+          diacriticIssues,
           riskScore,
           riskLevel,
           riskExplanation,
