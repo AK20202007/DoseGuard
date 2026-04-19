@@ -13,29 +13,36 @@ type Props = {
 function TextBlock({
   label,
   content,
-  variant = 'default',
+  icon,
+  accent = false,
   mono = false,
 }: {
   label: string;
   content: string;
-  variant?: 'default' | 'subdued' | 'accent';
+  icon: string;
+  accent?: boolean;
   mono?: boolean;
 }) {
-  const containerClass =
-    variant === 'subdued'
-      ? 'bg-slate-50 border-slate-200 text-slate-600'
-      : variant === 'accent'
-        ? 'bg-blue-50 border-blue-200 text-blue-900'
-        : 'bg-white border-slate-200 text-slate-800';
-  const labelClass =
-    variant === 'accent' ? 'text-blue-700' : 'text-slate-500';
-
   return (
     <div>
-      <div className={`text-xs font-semibold uppercase tracking-wide mb-1.5 ${labelClass}`}>
-        {label}
+      <div className="flex items-center gap-1.5 mb-2">
+        <span
+          className={`material-symbols-outlined ${accent ? 'text-primary' : 'text-on-surface-variant'}`}
+          style={{ fontSize: '14px' }}
+        >
+          {icon}
+        </span>
+        <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
+          {label}
+        </span>
       </div>
-      <div className={`text-sm rounded border p-3 ${containerClass} ${mono ? 'font-mono' : ''}`}>
+      <div
+        className={`text-sm rounded p-3 leading-relaxed ${
+          accent
+            ? 'token-lock text-on-surface font-medium'
+            : 'bg-surface-container-low text-on-surface border-l-2 border-outline-variant'
+        } ${mono ? 'font-mono' : 'font-body'}`}
+      >
         {content || <span className="text-slate-400 italic">—</span>}
       </div>
     </div>
@@ -43,20 +50,21 @@ function TextBlock({
 }
 
 export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
-  const simplifyEvent = steps.get('simplify');
-  const simplifyResult = simplifyEvent?.result as SimplificationResult | undefined;
-  const translateDone = steps.get('translate')?.status === 'complete';
-  const backTranslateDone = steps.get('backTranslate')?.status === 'complete';
-
+  const simplifyResult = steps.get('simplify')?.result as SimplificationResult | undefined;
   const showProgress = isLoading || (steps.size > 0 && !finalResult);
   const showResults = finalResult !== null;
 
   if (!showProgress && !showResults) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
-        <div className="text-slate-200 text-5xl mb-4">⇄</div>
-        <p className="text-sm text-slate-400">
-          Enter an instruction and click Analyze to see the translation pipeline
+      <div className="bg-surface-container-lowest rounded-lg shadow-sm p-10 text-center border border-slate-100">
+        <span
+          className="material-symbols-outlined text-slate-200 block mb-3"
+          style={{ fontSize: '48px' }}
+        >
+          sync_alt
+        </span>
+        <p className="text-sm text-on-surface-variant">
+          Enter a medication instruction and click Analyze to see the translation pipeline
         </p>
       </div>
     );
@@ -64,56 +72,104 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
 
   return (
     <div className="space-y-4">
-      {(showProgress || (steps.size > 0)) && (
+      {(showProgress || steps.size > 0) && (
         <StepProgress steps={steps} isLoading={isLoading} />
       )}
 
       {showResults && (
         <>
-          <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-4">
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              Pipeline Output
-            </h2>
-
-            <TextBlock
-              label="Original Source"
-              content={finalResult.originalInstruction}
-              variant="subdued"
-            />
-
-            {simplifyResult?.rewritten && (
+          {/* Translation output card */}
+          <div className="bg-surface-container-lowest rounded-lg overflow-hidden shadow-sm border border-slate-100">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+              <span
+                className="material-symbols-outlined text-primary"
+                style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}
+              >
+                translate
+              </span>
+              <div>
+                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
+                  Pipeline Output
+                </p>
+                <h3 className="text-sm font-bold text-on-surface leading-none mt-0.5">
+                  Translation Record
+                </h3>
+              </div>
+            </div>
+            <div className="p-5 space-y-5">
               <TextBlock
-                label="Simplified Source (used for translation)"
-                content={simplifyResult.rewritten}
-                variant="accent"
+                icon="description"
+                label="Original Source"
+                content={finalResult.originalInstruction}
               />
-            )}
 
-            {(translateDone || finalResult.translation) && (
-              <TextBlock
-                label={`Translation → ${finalResult.targetLanguage}`}
-                content={finalResult.translation}
-                mono
-              />
-            )}
+              {simplifyResult?.rewritten && (
+                <TextBlock
+                  icon="auto_fix_high"
+                  label="Simplified (used for translation)"
+                  content={simplifyResult.rewritten}
+                  accent
+                />
+              )}
 
-            {(backTranslateDone || finalResult.backTranslation) && (
-              <TextBlock
-                label="Re-read in English (safety check)"
-                content={finalResult.backTranslation}
-              />
-            )}
+              {finalResult.translation && (
+                <TextBlock
+                  icon="translate"
+                  label={`Translation → ${finalResult.targetLanguage}`}
+                  content={finalResult.translation}
+                  mono
+                  accent
+                />
+              )}
+
+              {finalResult.backTranslation && (
+                <TextBlock
+                  icon="sync_alt"
+                  label="Re-read in English (safety check)"
+                  content={finalResult.backTranslation}
+                />
+              )}
+            </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">
-              Field-by-Field Safety Check
-            </h2>
-            <FieldComparisonTable
-              sourceFields={finalResult.sourceFields}
-              backTranslatedFields={finalResult.backTranslatedFields}
-              driftIssues={finalResult.driftIssues}
-            />
+          {/* Field comparison card */}
+          <div className="bg-surface-container-lowest rounded-lg overflow-hidden shadow-sm border border-slate-100">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+              <span
+                className="material-symbols-outlined text-primary"
+                style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}
+              >
+                verified_user
+              </span>
+              <div>
+                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
+                  Field-by-Field Safety Check
+                </p>
+                <h3 className="text-sm font-bold text-on-surface leading-none mt-0.5">
+                  Deterministic Comparison Table
+                </h3>
+              </div>
+              {finalResult.driftIssues.length === 0 && (
+                <div className="ml-auto flex items-center gap-1.5 px-3 py-1 bg-primary-fixed rounded font-label">
+                  <span
+                    className="material-symbols-outlined text-on-primary-fixed"
+                    style={{ fontSize: '14px', fontVariationSettings: "'FILL' 1" }}
+                  >
+                    verified
+                  </span>
+                  <span className="text-[10px] font-bold text-on-primary-fixed uppercase tracking-widest">
+                    Verified
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="p-5">
+              <FieldComparisonTable
+                sourceFields={finalResult.sourceFields}
+                backTranslatedFields={finalResult.backTranslatedFields}
+                driftIssues={finalResult.driftIssues}
+              />
+            </div>
           </div>
         </>
       )}
