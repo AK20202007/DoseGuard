@@ -387,8 +387,13 @@ function render(d) {
   const rel = d.reliability || {};
   engineGrid.innerHTML = Object.entries(d.engines).map(([name, eng]) => {
     const available = eng.available;
-    const badgeClass = available ? 'badge-ok' : (eng.error?.includes('token') || eng.error?.includes('not set') ? 'badge-na' : 'badge-err');
-    const badgeText  = available ? 'ONLINE' : (eng.error?.includes('token') || eng.error?.includes('not set') ? 'NO TOKEN' : 'ERROR');
+    const isSoftFail = available && (d.soft_failed_engines || []).includes(name);
+    const badgeClass = isSoftFail ? 'badge-na'
+      : available ? 'badge-ok'
+      : (eng.error?.includes('token') || eng.error?.includes('not set') ? 'badge-na' : 'badge-err');
+    const badgeText = isSoftFail ? 'NO DATA'
+      : available ? 'ONLINE'
+      : (eng.error?.includes('token') || eng.error?.includes('not set') ? 'NO TOKEN' : 'ERROR');
 
     const relData = rel[name];
     const relPct = relData ? (relData.overall * 100).toFixed(0) : null;
@@ -408,7 +413,14 @@ function render(d) {
         <div class="rel-bar"><div class="rel-fill" style="width:${relPct}%;background:${relCol}"></div></div>
       </div>` : '';
 
-    const errBlock = eng.error ? `<div style="color:var(--muted);font-size:12px;margin-top:8px;padding:8px;background:#0a0c14;border-radius:6px">${eng.error}</div>` : '';
+    const errBlock = isSoftFail
+      ? `<div style="color:var(--yellow);font-size:12px;margin-top:8px;padding:8px;background:#1c1500;border:1px solid #713f12;border-radius:6px">
+           ⚠ Engine ran but returned no data for this image.<br>
+           Excluded from consensus — other engines still voted.
+         </div>`
+      : eng.error
+        ? `<div style="color:var(--muted);font-size:12px;margin-top:8px;padding:8px;background:#0a0c14;border-radius:6px">${eng.error}</div>`
+        : '';
 
     const rawToggle = `<span class="json-toggle" onclick="toggleJson(this)">▶ raw text</span>
       <div class="json-block">${escHtml(eng.raw_text || '(empty)')}</div>`;

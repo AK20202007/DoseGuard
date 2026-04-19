@@ -118,7 +118,23 @@ async def analyze(file: UploadFile = File(...)):
         }
 
     # ── Cross-check ──────────────────────────────────────────────────────────
-    available = {n: r for n, r in engine_results.items() if r["available"]}
+    # Exclude engines that errored OR returned no useful data (all-null critical fields).
+    # An engine with blank output is counted as absent, not as a disagreement.
+    def _engine_has_data(r: dict) -> bool:
+        if not r["available"]:
+            return False
+        fields = r.get("fields") or {}
+        return any(
+            fields.get(f) is not None
+            for f in ("medication_name", "dose_value", "dose_unit")
+        )
+
+    available = {n: r for n, r in engine_results.items() if _engine_has_data(r)}
+    # Track engines that ran but returned nothing (soft failure)
+    soft_failed = {
+        n: r for n, r in engine_results.items()
+        if r["available"] and not _engine_has_data(r)
+    }
     cross_check: dict[str, dict] = {}
     merged_fields: dict[str, Any] = {}
 
@@ -127,25 +143,25 @@ async def analyze(file: UploadFile = File(...)):
             n: _norm((r["fields"] or {}).get(field))
             for n, r in available.items()
         }
+        # Pairwise agreement (for display)
         pairs: dict[str, bool] = {}
         for ea, eb in combinations(available.keys(), 2):
             va, vb = votes.get(ea), votes.get(eb)
             pairs[f"{ea}_vs_{eb}"] = (va is not None and vb is not None and va == vb)
 
-        n_pairs = len(pairs)
-        agree_count = sum(1 for v in pairs.values() if v)
-        agreement_score = round(agree_count / n_pairs, 4) if n_pairs else 1.0
-
-        winner, confidence = _plurality_vote(votes)
+        # Plurality score: fraction of engines that voted for the winning value.
+        # With 3 engines where 2 agree: plurality = 2/3 = 0.67.
+        # Pairwise would give 1/3 = 0.33 (misleading) — so we use plurality.
+        winner, agreement_score = _plurality_vote(votes)
         merged_fields[field] = winner
 
         cross_check[field] = {
             "votes":           votes,
             "pairwise":        pairs,
-            "agreement_score": agreement_score,
+            "agreement_score": agreement_score,          # plurality fraction
             "unanimous":       agreement_score == 1.0,
             "merged_value":    winner,
-            "confidence":      confidence,
+            "confidence":      agreement_score,
         }
 
     critical_scores = [cross_check[f]["agreement_score"] for f in CRITICAL_FIELDS]
@@ -281,6 +297,7 @@ async def analyze(file: UploadFile = File(...)):
     return JSONResponse({
         "image_preview": f"data:image/jpeg;base64,{img_b64}",
         "filename": file.filename,
+        "soft_failed_engines": list(soft_failed.keys()),
         "engines": engine_results,
         "cross_check": cross_check,
         "merged": {

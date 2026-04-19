@@ -20,14 +20,18 @@ from PIL.Image import Image
 
 from .base import BaseOCREngine
 from ..models import ExtractedPrescription
-from ..parsers import parse_prescription_text, extract_dose, extract_frequency
+from ..parsers import parse_prescription_text, extract_dose, extract_frequency, extract_medication_name
 
 _OLLAMA_URL = "http://localhost:11434/api/generate"
 
-_PROMPT = (
-    "What is the patient name, drug name, dose, and how often to take it "
-    "on this prescription label?"
-)
+# Moondream 2B sometimes returns empty for complex multi-part questions.
+# We try prompts in order, stopping at the first non-empty response.
+_PROMPT_CHAIN = [
+    "What drug name and dose is on this label?",                         # concise — most reliable
+    "What is the drug name, dose, and how often to take it?",            # medium
+    "What is the patient name, drug name, dose, and how often to take it on this prescription label?",  # full
+    "Describe the text on this medication label.",                        # fallback — always responds
+]
 
 
 class MoondreamEngine(BaseOCREngine):
@@ -41,30 +45,63 @@ class MoondreamEngine(BaseOCREngine):
         image.convert("RGB").save(buf, format="JPEG", quality=90)
         return base64.b64encode(buf.getvalue()).decode()
 
+    async def _call_ollama(
+        self, client: httpx.AsyncClient, b64: str, prompt: str
+    ) -> str:
+        """Single Ollama call; returns stripped response string."""
+        r = await client.post(_OLLAMA_URL, json={
+            "model": self._model,
+            "prompt": prompt,
+            "images": [b64],
+            "stream": False,
+            "options": {"temperature": 0.0, "num_predict": 200},
+        })
+        if r.status_code != 200:
+            return ""
+        return r.json().get("response", "").strip()
+
     async def extract(self, image: Image) -> ExtractedPrescription:
         try:
             b64 = self._b64(image)
-            payload = {
-                "model": self._model,
-                "prompt": _PROMPT,
-                "images": [b64],
-                "stream": False,
-                "options": {"temperature": 0.0, "num_predict": 500},
-            }
+
             async with httpx.AsyncClient(timeout=60.0) as client:
-                r = await client.post(_OLLAMA_URL, json=payload)
+                # Check model exists
+                probe = await client.post(_OLLAMA_URL, json={
+                    "model": self._model, "prompt": "hi", "stream": False,
+                    "options": {"num_predict": 1}
+                })
+                if probe.status_code == 404:
+                    return self._safe_result(
+                        f"Model '{self._model}' not found. Run: ollama pull moondream"
+                    )
 
-            if r.status_code == 404:
+                # Try each prompt in the chain; stop at first non-empty response
+                raw = ""
+                for prompt in _PROMPT_CHAIN:
+                    raw = await self._call_ollama(client, b64, prompt)
+                    if raw:
+                        break
+
+            if not raw:
                 return self._safe_result(
-                    f"Model '{self._model}' not found in Ollama. "
-                    "Run: ollama pull moondream"
+                    "Moondream returned empty response for all prompts — "
+                    "image may be too complex or model needs more VRAM."
                 )
-            if r.status_code != 200:
-                return self._safe_result(f"Ollama error {r.status_code}: {r.text[:200]}")
 
-            data = r.json()
-            raw = data.get("response", "").strip()
-            fields = self._parse_natural(raw)
+            # Use the full multi-strategy parser — handles both structured
+            # ("Drug name is X, dose is Y") and descriptive ("...reads Acetazolamide 250mg...")
+            parsed = parse_prescription_text(raw)
+            # _parse_natural gives us better extraction for conversational answers;
+            # try it too and use whichever found more fields
+            natural = self._parse_natural(raw)
+            fields = {
+                "medication_name": parsed["medication_name"] or natural.get("medication_name"),
+                "dose_value":      parsed["dose_value"]      or natural.get("dose_value"),
+                "dose_unit":       parsed["dose_unit"]       or natural.get("dose_unit"),
+                "frequency":       parsed["frequency"]       or natural.get("frequency"),
+                "patient_name":    None,
+                "prescriber":      None,
+            }
             return ExtractedPrescription(
                 engine=self.name,
                 raw_text=raw,
