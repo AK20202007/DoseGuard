@@ -25,7 +25,7 @@ from PIL import Image
 
 from pipeline.ocr_engines.easyocr_engine import EasyOCREngine
 from pipeline.ocr_engines.tesseract_engine import TesseractEngine
-from pipeline.ocr_engines.llava_engine import LLaVAEngine
+from pipeline.ocr_engines.paligemma_engine import PaliGemmaEngine
 from pipeline.layer2_safety_vault import DeterministicSafetyVault
 from pipeline.models import ConsensusResult, FieldConsensus, ExtractedPrescription
 
@@ -40,9 +40,9 @@ _engines: dict[str, Any] = {}
 
 def _get_engines():
     if not _engines:
-        _engines["easyocr"]   = EasyOCREngine()
-        _engines["tesseract"] = TesseractEngine()
-        _engines["llava"]     = LLaVAEngine()
+        _engines["easyocr"]    = EasyOCREngine()
+        _engines["tesseract"]  = TesseractEngine()
+        _engines["paligemma"]  = PaliGemmaEngine()
     return _engines
 
 CRITICAL_FIELDS = ("medication_name", "dose_value", "dose_unit", "frequency")

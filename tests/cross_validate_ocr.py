@@ -40,7 +40,7 @@ from PIL import Image
 
 from pipeline.ocr_engines.easyocr_engine import EasyOCREngine
 from pipeline.ocr_engines.tesseract_engine import TesseractEngine
-from pipeline.ocr_engines.llava_engine import LLaVAEngine
+from pipeline.ocr_engines.paligemma_engine import PaliGemmaEngine
 from pipeline.models import ExtractedPrescription
 
 RESULTS_DIR = Path("tests/results")
@@ -267,9 +267,9 @@ async def run(image_dir: Path):
 
     # Build available engines
     engines: dict[str, Any] = {
-        "easyocr":   EasyOCREngine(),
-        "tesseract": TesseractEngine(),
-        "llava":     LLaVAEngine(),
+        "easyocr":    EasyOCREngine(),
+        "tesseract":  TesseractEngine(),
+        "paligemma":  PaliGemmaEngine(),
     }
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)

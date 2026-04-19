@@ -23,7 +23,7 @@ from .models import (
     ExtractedPrescription,
     FieldConsensus,
 )
-from .ocr_engines import EasyOCREngine, LLaVAEngine, PaddleOCREngine
+from .ocr_engines import EasyOCREngine, PaliGemmaEngine, PaddleOCREngine, TesseractEngine
 from .ocr_engines.base import BaseOCREngine
 
 
@@ -128,8 +128,8 @@ class OCREnsembleCouncil:
     ) -> None:
         self._engines: list[BaseOCREngine] = engines or [
             EasyOCREngine(),
-            PaddleOCREngine(),
-            LLaVAEngine(),
+            TesseractEngine(),
+            PaliGemmaEngine(),
         ]
         self._threshold = threshold or float(os.getenv("CONSENSUS_THRESHOLD", "1.0"))
 
