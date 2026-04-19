@@ -21,6 +21,17 @@ class TesseractEngine(BaseOCREngine):
     async def extract(self, image: Image) -> ExtractedPrescription:
         try:
             import pytesseract  # type: ignore
+            import shutil
+
+            # Explicitly locate tesseract — server process may have a narrow PATH
+            binary = (
+                shutil.which("tesseract")
+                or "/opt/homebrew/bin/tesseract"   # macOS Apple Silicon (brew)
+                or "/usr/local/bin/tesseract"       # macOS Intel (brew)
+                or "/usr/bin/tesseract"             # Linux
+            )
+            pytesseract.pytesseract.tesseract_cmd = binary
+
             raw_text = pytesseract.image_to_string(
                 image.convert("RGB"), config=self._config
             )

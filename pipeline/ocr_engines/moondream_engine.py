@@ -73,11 +73,48 @@ class MoondreamEngine(BaseOCREngine):
             )
 
         except httpx.ConnectError:
+            # Try to auto-start Ollama in the background
+            started = self._try_start_ollama()
+            if started:
+                # Retry once after a short wait
+                import asyncio as _asyncio
+                await _asyncio.sleep(3)
+                try:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        r = await client.post(_OLLAMA_URL, json=payload)
+                        if r.status_code == 200:
+                            raw = r.json().get("response", "").strip()
+                            fields = self._parse_natural(raw)
+                            return ExtractedPrescription(
+                                engine=self.name, raw_text=raw, confidence=0.85, **fields
+                            )
+                except Exception:
+                    pass
             return self._safe_result(
-                "Ollama not running. Start it with: ollama serve"
+                "Ollama not running. It will auto-start — please retry in a few seconds. "
+                "Or run manually: ollama serve"
             )
         except Exception as exc:
             return self._safe_result(str(exc))
+
+    @staticmethod
+    def _try_start_ollama() -> bool:
+        """Attempt to launch `ollama serve` as a background process."""
+        import shutil
+        import subprocess
+        binary = shutil.which("ollama") or "/usr/local/bin/ollama"
+        if not shutil.which("ollama") and not __import__("os").path.exists(binary):
+            return False
+        try:
+            subprocess.Popen(
+                [binary, "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            return True
+        except Exception:
+            return False
 
     @staticmethod
     def _parse_natural(text: str) -> dict:
