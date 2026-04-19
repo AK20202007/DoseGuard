@@ -1,10 +1,12 @@
 import type { SupportedLanguage } from '@/lib/types';
-import { MENYO_EXAMPLES } from '@/data/menyo-examples';
+import type { MenyoExample } from '@/data/menyo-examples';
+import type { DiacriticIssue } from '@/lib/pipeline/diacriticValidator';
 
 export function buildTranslatePrompt(
   text: string,
   targetLanguage: SupportedLanguage,
   useFewShot: boolean,
+  selectedExamples?: MenyoExample[],
 ): { system: string; user: string } {
   const system = `You are a certified medical translator specializing in patient-facing medication instructions. Translate the provided English medication instruction into ${targetLanguage}.
 
@@ -25,7 +27,8 @@ CRITICAL RULES — follow all of these without exception:
 
   let userContent: string;
   if (useFewShot && targetLanguage === 'Yoruba') {
-    const examples = MENYO_EXAMPLES.map(ex => `[EN]: ${ex.en}\n[YO]: ${ex.yo}`).join('\n\n');
+    const pool = selectedExamples ?? [];
+    const examples = pool.map(ex => `[EN]: ${ex.en}\n[YO]: ${ex.yo}`).join('\n\n');
     userContent = `Here are examples of correctly diacritized English-to-Yoruba medical instruction translations:
 
 ${examples}
@@ -40,4 +43,28 @@ Now translate the following medication instruction into Yoruba, following the sa
   }
 
   return { system, user: userContent };
+}
+
+export function buildDiacriticCorrectionPrompt(
+  translation: string,
+  issues: DiacriticIssue[],
+): { system: string; user: string } {
+  const system = `You are correcting tonal diacritic marks in a Yoruba medical translation.
+Fix ONLY the missing accent marks listed below. Do not change any other word, number, punctuation, or sentence structure.
+Return ONLY the corrected Yoruba text with no explanation.`;
+
+  const fixes = issues
+    .map(i => `  • "${i.bare}" → "${i.canonical}"  (${i.meaning})`)
+    .join('\n');
+
+  const user = `This Yoruba translation has missing tone marks on safety-critical words:
+
+${translation}
+
+Words that must be corrected:
+${fixes}
+
+Return the translation with only these tone marks fixed and nothing else changed.`;
+
+  return { system, user };
 }

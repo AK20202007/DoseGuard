@@ -15,8 +15,10 @@ import { PipelinePanel } from '@/components/PipelinePanel';
 import { RiskPanel } from '@/components/RiskPanel';
 import { DemoPanel } from '@/components/DemoPanel';
 import { AuditLog } from '@/components/AuditLog';
+import { useLang } from '@/lib/i18nContext';
 
 export default function Home() {
+  const { lang, setLang, t } = useLang();
   const [instruction, setInstruction] = useState('');
   const [targetLanguage, setTargetLanguage] = useState<SupportedLanguage>('Spanish');
   const [useSimplification, setUseSimplification] = useState(true);
@@ -82,9 +84,7 @@ export default function Home() {
               }
               setIsLoading(false);
             }
-          } catch {
-            // malformed SSE line — skip
-          }
+          } catch {}
         }
       }
     } catch (err) {
@@ -107,72 +107,216 @@ export default function Home() {
     (steps.get('simplify')?.result as SimplificationResult | undefined) ?? null;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm font-bold select-none">
-              D
+    <div className="min-h-screen bg-[#f7f9fc] font-sans">
+
+      {/* ── Sidebar ─────────────────────────────────────────────── */}
+      <aside className="fixed left-0 top-0 h-full w-64 bg-slate-100 flex-col px-4 py-6 z-[60] overflow-y-auto hidden md:flex">
+        <div className="mb-8 px-2">
+          <div className="flex items-center gap-2.5 mb-1">
+            <div className="w-8 h-8 bg-primary rounded flex items-center justify-center flex-shrink-0">
+              <span
+                className="material-symbols-outlined text-white"
+                style={{ fontSize: '18px', fontVariationSettings: "'FILL' 1" }}
+              >
+                shield
+              </span>
             </div>
-            <div>
-              <h1 className="text-base font-bold text-slate-900 leading-none">DoseGuard</h1>
-              <p className="text-xs text-slate-500 mt-0.5">Medical Translation Safety Tool</p>
-            </div>
+            <h2 className="text-sm font-black text-blue-900 uppercase tracking-widest leading-none">
+              {t('appName')}
+            </h2>
           </div>
-          <p className="text-xs text-slate-400 text-right max-w-sm hidden sm:block">
-            This tool supports translation safety review. It does not provide medical advice.
-            Do not use for emergencies.
+          <p className="text-[10px] font-bold text-blue-700/60 uppercase tracking-widest pl-[42px]">
+            {t('appSubtitle')}
           </p>
         </div>
-      </header>
 
-      {/* Info Banner */}
-      <div className="bg-blue-600 text-white text-xs py-2 px-4 text-center">
-        High-risk or uncertain translations require clinician or certified interpreter review
-        before patient use.
-      </div>
+        <nav className="flex-1 space-y-1">
+          <div className="flex items-center gap-3 px-3 py-2.5 bg-white text-blue-700 font-bold rounded shadow-sm translate-x-1 cursor-default">
+            <span
+              className="material-symbols-outlined text-xl"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+            >
+              health_and_safety
+            </span>
+            <span className="text-sm">{t('navAnalyze')}</span>
+          </div>
+          <div
+            className={`flex items-center gap-3 px-3 py-2.5 rounded cursor-default transition-all ${
+              activeDemoId ? 'text-blue-600 font-semibold' : 'text-slate-500'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">science</span>
+            <span className="text-sm">{t('navDemo')}</span>
+          </div>
+          <div
+            className={`flex items-center gap-3 px-3 py-2.5 rounded cursor-default transition-all ${
+              auditLog.length > 0 ? 'text-slate-600' : 'text-slate-400'
+            }`}
+          >
+            <span className="material-symbols-outlined text-xl">history</span>
+            <span className="text-sm">{t('navSessionLog')}</span>
+            {auditLog.length > 0 && (
+              <span className="ml-auto text-[10px] font-bold bg-primary text-white rounded px-1.5 py-0.5">
+                {auditLog.length}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 px-3 py-2.5 text-slate-400 cursor-default">
+            <span className="material-symbols-outlined text-xl">medication</span>
+            <span className="text-sm">{t('navPillScan')}</span>
+          </div>
+        </nav>
 
-      {/* Error Banner */}
-      {error && (
-        <div className="bg-red-50 border-b border-red-200 text-red-700 text-sm py-2.5 px-4 text-center">
-          {error}
+        <div className="mt-auto pt-4 border-t border-slate-200/60 space-y-1">
+          <div className="flex items-center gap-3 px-3 py-2 text-slate-400 cursor-default">
+            <span className="material-symbols-outlined text-xl">description</span>
+            <span className="text-xs">{t('navSafetyDocs')}</span>
+          </div>
+          <div className="flex items-center gap-3 px-3 py-2 text-slate-400 cursor-default">
+            <span className="material-symbols-outlined text-xl">contact_support</span>
+            <span className="text-xs">{t('navSupport')}</span>
+          </div>
+          <div className="mx-1 mt-3 p-3 bg-white rounded border border-slate-200/60">
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              {t('sidebarDisclaimer')}
+            </p>
+          </div>
         </div>
-      )}
+      </aside>
 
-      {/* Main 3-column grid */}
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4 grid grid-cols-12 gap-4 items-start">
-        {/* Left: Input — 3 cols */}
-        <div className="col-span-12 md:col-span-3">
-          <InputPanel
-            instruction={instruction}
-            setInstruction={setInstruction}
-            targetLanguage={targetLanguage}
-            setTargetLanguage={setTargetLanguage}
-            useSimplification={useSimplification}
-            setUseSimplification={setUseSimplification}
-            onAnalyze={handleAnalyze}
-            isLoading={isLoading}
-            simplificationResult={simplificationResult}
-          />
+      {/* ── Main ────────────────────────────────────────────────── */}
+      <main className="md:ml-64 flex flex-col min-h-screen">
+
+        {/* Top Bar */}
+        <header className="sticky top-0 z-50 bg-[#f7f9fc]/90 backdrop-blur-xl border-b border-slate-200/60 px-6 py-3 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            {/* Mobile brand */}
+            <div className="flex items-center gap-2 md:hidden">
+              <div className="w-7 h-7 bg-primary rounded flex items-center justify-center">
+                <span
+                  className="material-symbols-outlined text-white"
+                  style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}
+                >
+                  shield
+                </span>
+              </div>
+              <span className="text-sm font-black text-blue-900 uppercase tracking-widest">
+                {t('appName')}
+              </span>
+            </div>
+            <span className="px-2 py-0.5 bg-primary-fixed text-on-primary-fixed text-[10px] font-bold uppercase tracking-widest rounded hidden md:inline">
+              {isLoading ? t('statusProcessing') : t('statusOperational')}
+            </span>
+            <span className="text-sm font-bold text-on-surface hidden md:block">
+              {t('headerTitle')}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-on-surface-variant hidden lg:block max-w-sm text-right leading-relaxed">
+              {t('clinicianReview')}
+            </p>
+            {/* Language toggle */}
+            <button
+              onClick={() => setLang(lang === 'en' ? 'yo' : 'en')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-slate-200 bg-white text-xs font-bold text-on-surface hover:border-primary hover:text-primary transition-colors"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>translate</span>
+              {t('switchLang')}
+            </button>
+            <div className="flex items-center">
+              <button className="p-1.5 text-slate-500 hover:bg-slate-200/50 rounded transition-colors">
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                  notifications
+                </span>
+              </button>
+              <button className="p-1.5 text-slate-500 hover:bg-slate-200/50 rounded transition-colors">
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                  settings
+                </span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Error Banner */}
+        {error && (
+          <div className="bg-red-50 border-b border-red-200 text-red-700 text-xs py-2.5 px-6 flex items-center gap-2">
+            <span
+              className="material-symbols-outlined text-red-500 flex-shrink-0"
+              style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}
+            >
+              error
+            </span>
+            {error}
+          </div>
+        )}
+
+        {/* 3-Column Grid */}
+        <div className="p-5 grid grid-cols-12 gap-5 flex-1 items-start max-w-[1600px] w-full mx-auto">
+          <div className="col-span-12 md:col-span-3">
+            <InputPanel
+              instruction={instruction}
+              setInstruction={setInstruction}
+              targetLanguage={targetLanguage}
+              setTargetLanguage={setTargetLanguage}
+              useSimplification={useSimplification}
+              setUseSimplification={setUseSimplification}
+              onAnalyze={handleAnalyze}
+              isLoading={isLoading}
+              simplificationResult={simplificationResult}
+            />
+          </div>
+          <div className="col-span-12 md:col-span-6">
+            <PipelinePanel
+              steps={steps}
+              finalResult={finalResult}
+              isLoading={isLoading}
+              instructionText={instruction}
+            />
+          </div>
+          <div className="col-span-12 md:col-span-3">
+            <RiskPanel finalResult={finalResult} isLoading={isLoading} />
+          </div>
         </div>
 
-        {/* Center: Pipeline Output — 6 cols */}
-        <div className="col-span-12 md:col-span-6">
-          <PipelinePanel steps={steps} finalResult={finalResult} isLoading={isLoading} />
-        </div>
+        {/* Demo Panel */}
+        <DemoPanel onSelectDemo={handleSelectDemo} activeDemoId={activeDemoId} />
 
-        {/* Right: Risk Analysis — 3 cols */}
-        <div className="col-span-12 md:col-span-3">
-          <RiskPanel finalResult={finalResult} isLoading={isLoading} />
-        </div>
+        {/* Audit Log */}
+        <AuditLog entries={auditLog} />
+
+        {/* Footer */}
+        <footer className="bg-[#f2f4f7] border-t border-slate-200/60 py-5 px-6 mt-auto">
+          <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-center gap-3">
+            <span className="text-xs font-bold text-primary">{t('footerBrand')}</span>
+            <div className="flex gap-5 text-xs text-on-surface-variant">
+              <span className="cursor-default">{t('privacyPolicy')}</span>
+              <span className="cursor-default">{t('clinicalProtocol')}</span>
+            </div>
+            <p className="text-xs text-on-surface-variant">{t('footerCopyright')}</p>
+          </div>
+        </footer>
       </main>
 
-      {/* Demo Panel */}
-      <DemoPanel onSelectDemo={handleSelectDemo} activeDemoId={activeDemoId} />
-
-      {/* Audit Log */}
-      <AuditLog entries={auditLog} />
+      {/* ── Mobile Bottom Nav ────────────────────────────────────── */}
+      <nav className="fixed bottom-0 left-0 w-full z-50 md:hidden flex justify-around items-center pt-2 pb-6 px-4 bg-white/80 backdrop-blur-md border-t border-slate-200/20 shadow-[0_-4px_24px_rgba(25,28,30,0.06)]">
+        <div className="flex flex-col items-center text-primary bg-primary-fixed rounded px-4 py-1 cursor-default">
+          <span className="material-symbols-outlined mb-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>health_and_safety</span>
+          <span className="text-[10px] font-medium">{t('mobileAnalyze')}</span>
+        </div>
+        <div className="flex flex-col items-center text-slate-500 px-4 py-1 cursor-default">
+          <span className="material-symbols-outlined mb-0.5">science</span>
+          <span className="text-[10px] font-medium">{t('mobileDemo')}</span>
+        </div>
+        <div className="flex flex-col items-center text-slate-500 px-4 py-1 cursor-default">
+          <span className="material-symbols-outlined mb-0.5">medication</span>
+          <span className="text-[10px] font-medium">{t('mobilePillScan')}</span>
+        </div>
+        <div className="flex flex-col items-center text-slate-500 px-4 py-1 cursor-default">
+          <span className="material-symbols-outlined mb-0.5">history</span>
+          <span className="text-[10px] font-medium">{t('mobileLog')}</span>
+        </div>
+      </nav>
     </div>
   );
 }

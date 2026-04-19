@@ -1,15 +1,19 @@
 'use client';
 
 import type { PipelineStep, StreamEvent } from '@/lib/types';
+import type { TKey } from '@/lib/i18n';
+import { useLang } from '@/lib/i18nContext';
 
-const STEPS: { key: PipelineStep; label: string }[] = [
-  { key: 'simplify', label: 'Source Analysis' },
-  { key: 'translate', label: 'Translation' },
-  { key: 'backTranslate', label: 'Back-Translation' },
-  { key: 'extractSource', label: 'Extract Source Fields' },
-  { key: 'extractBack', label: 'Extract Back-Translation Fields' },
-  { key: 'analyze', label: 'Drift Analysis & Risk Scoring' },
-  { key: 'teachBack', label: 'Teach-Back Question' },
+type StepDef = { key: PipelineStep; labelKey: TKey; descKey: TKey; icon: string };
+
+const STEPS: StepDef[] = [
+  { key: 'simplify',      labelKey: 'stepSimplifyLabel',      descKey: 'stepSimplifyDesc',      icon: 'auto_fix_high' },
+  { key: 'translate',     labelKey: 'stepTranslateLabel',     descKey: 'stepTranslateDesc',     icon: 'translate'     },
+  { key: 'tonalRail',     labelKey: 'stepTonalRailLabel',     descKey: 'stepTonalRailDesc',     icon: 'spellcheck'    },
+  { key: 'backTranslate', labelKey: 'stepBackTranslateLabel', descKey: 'stepBackTranslateDesc', icon: 'sync_alt'      },
+  { key: 'extractSource', labelKey: 'stepExtractSourceLabel', descKey: 'stepExtractSourceDesc', icon: 'data_object'   },
+  { key: 'extractBack',   labelKey: 'stepExtractBackLabel',   descKey: 'stepExtractBackDesc',   icon: 'data_object'   },
+  { key: 'analyze',       labelKey: 'stepAnalyzeLabel',       descKey: 'stepAnalyzeDesc',       icon: 'analytics'     },
 ];
 
 type Props = {
@@ -17,84 +21,99 @@ type Props = {
   isLoading: boolean;
 };
 
-function CheckIcon() {
+function Spinner() {
   return (
-    <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-      <path
-        fillRule="evenodd"
-        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-        clipRule="evenodd"
-      />
-    </svg>
-  );
-}
-
-function SpinIcon() {
-  return (
-    <svg className="w-5 h-5 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+    <svg className="w-5 h-5 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-      />
-    </svg>
-  );
-}
-
-function ErrorIcon() {
-  return (
-    <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-      <path
-        fillRule="evenodd"
-        d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-        clipRule="evenodd"
-      />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
   );
 }
 
 export function StepProgress({ steps, isLoading }: Props) {
+  const { t } = useLang();
   if (!isLoading && steps.size === 0) return null;
 
+  const isDone = steps.get('done')?.status === 'complete';
+
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-4">
-      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
-        Pipeline Progress
-      </h3>
-      <div className="space-y-2">
-        {STEPS.map(({ key, label }) => {
+    <div className="bg-surface-container-lowest rounded-lg border-l-4 border-primary shadow-sm overflow-hidden">
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+        <span
+          className="material-symbols-outlined text-primary"
+          style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}
+        >
+          graphic_eq
+        </span>
+        <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
+          {t('pipelineProgress')}
+        </p>
+      </div>
+      <div className="p-5 space-y-3">
+        {STEPS.map(({ key, labelKey, descKey, icon }) => {
           const event = steps.get(key);
           const status = event?.status ?? 'pending';
           return (
-            <div key={key} className="flex items-center gap-2.5">
-              <div className="w-5 h-5 flex-shrink-0">
+            <div key={key} className="flex items-start gap-3">
+              <div className="w-5 h-5 flex-shrink-0 mt-0.5 flex items-center justify-center">
                 {status === 'complete' ? (
-                  <CheckIcon />
+                  <span className="material-symbols-outlined text-green-500" style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>
+                    check_circle
+                  </span>
                 ) : status === 'running' ? (
-                  <SpinIcon />
+                  <Spinner />
                 ) : status === 'error' ? (
-                  <ErrorIcon />
+                  <span className="material-symbols-outlined text-red-500" style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>
+                    cancel
+                  </span>
                 ) : (
-                  <div className="w-5 h-5 rounded-full border-2 border-slate-200" />
+                  <span className="material-symbols-outlined text-slate-300" style={{ fontSize: '20px' }}>
+                    {icon}
+                  </span>
                 )}
               </div>
-              <span
-                className={`text-sm ${
-                  status === 'complete'
-                    ? 'text-slate-600'
-                    : status === 'running'
-                      ? 'text-blue-700 font-medium'
-                      : status === 'error'
-                        ? 'text-red-600'
-                        : 'text-slate-400'
-                }`}
-              >
-                {label}
-              </span>
+              <div className="flex-1 min-w-0">
+                <span className={`text-sm leading-tight block font-medium ${
+                  status === 'complete' ? 'text-on-surface' :
+                  status === 'running'  ? 'text-primary'    :
+                  status === 'error'    ? 'text-red-600'    :
+                  'text-slate-400'
+                }`}>
+                  {t(labelKey)}
+                </span>
+                {(status === 'running' || status === 'complete') && (
+                  <span className="text-xs text-on-surface-variant leading-tight font-label">
+                    {t(descKey)}
+                  </span>
+                )}
+              </div>
             </div>
           );
         })}
+
+        {/* Pill scan CTA — appears after pipeline completes */}
+        {isDone && (
+          <button
+            onClick={() =>
+              document.getElementById('pill-scan-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+            className="flex items-start gap-3 w-full text-left group mt-1 pt-3 border-t border-slate-100"
+          >
+            <div className="w-5 h-5 flex-shrink-0 mt-0.5 flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary animate-pulse" style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>
+                medication
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <span className="text-sm leading-tight block font-medium text-primary group-hover:underline">
+                {t('verifyPhysicalPill')}
+              </span>
+              <span className="text-xs text-on-surface-variant leading-tight font-label">
+                {t('pillScanStepDesc')}
+              </span>
+            </div>
+          </button>
+        )}
       </div>
     </div>
   );

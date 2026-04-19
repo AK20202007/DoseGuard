@@ -1,10 +1,12 @@
 import { NextRequest } from 'next/server';
 import { getLanguageMetadata } from '@/data/languages';
 import { simplifySource } from '@/lib/pipeline/sourceSimplifier';
-import { translateInstruction } from '@/lib/pipeline/translator';
+import { translateInstruction, correctDiacritics } from '@/lib/pipeline/translator';
 import { backTranslateInstruction } from '@/lib/pipeline/backTranslator';
 import { extractMedicationFields } from '@/lib/pipeline/semanticExtractor';
 import { analyzeDrift } from '@/lib/pipeline/driftAnalyzer';
+import { validateDiacritics } from '@/lib/pipeline/diacriticValidator';
+import { runTonalRail, warmMT5 } from '@/lib/pipeline/tonalRail';
 import { scoreRisk } from '@/lib/pipeline/riskScorer';
 import { generateTeachBack } from '@/lib/pipeline/teachBackGenerator';
 import { appendAuditLog } from '@/lib/auditLog';
@@ -23,6 +25,9 @@ export async function POST(request: NextRequest) {
   const langMeta = getLanguageMetadata(targetLanguage);
   const encoder = new TextEncoder();
 
+  // Warm up mT5 model early so it's ready when tonal rail runs
+  if (targetLanguage === 'Yoruba') warmMT5();
+
   const stream = new ReadableStream({
     async start(controller) {
       function emit(event: StreamEvent) {
@@ -40,17 +45,37 @@ export async function POST(request: NextRequest) {
             ? simplificationResult.rewritten
             : instruction;
 
-        // ── Step 2: Translation ───────────────────────────────────────────
+        // ── Step 2: Translation (+ Yoruba diacritic self-correction) ─────
         emit({ step: 'translate', status: 'running' });
-        const translation = await translateInstruction(effectiveSource, targetLanguage, langMeta);
+        let translation = await translateInstruction(effectiveSource, targetLanguage, langMeta);
+
+        if (targetLanguage === 'Yoruba' && translation) {
+          const initialIssues = validateDiacritics(translation);
+          const highIssues = initialIssues.filter(i => i.severity === 'high');
+          if (highIssues.length > 0) {
+            const corrected = await correctDiacritics(translation, highIssues);
+            if (corrected && validateDiacritics(corrected).length < initialIssues.length) {
+              translation = corrected;
+            }
+          }
+        }
+
         emit({ step: 'translate', status: 'complete', result: translation });
 
-        // ── Step 3: Back-translation ──────────────────────────────────────
+        // ── Step 3: Tonal Rail (Yoruba only) ─────────────────────────────
+        let tonalRailResult: import('@/lib/types').TonalRailResult | undefined;
+        if (targetLanguage === 'Yoruba') {
+          emit({ step: 'tonalRail', status: 'running' });
+          tonalRailResult = await runTonalRail(effectiveSource, translation);
+          emit({ step: 'tonalRail', status: 'complete', result: tonalRailResult });
+        }
+
+        // ── Step 5: Back-translation ──────────────────────────────────────
         emit({ step: 'backTranslate', status: 'running' });
         const backTranslation = await backTranslateInstruction(translation, targetLanguage);
         emit({ step: 'backTranslate', status: 'complete', result: backTranslation });
 
-        // ── Steps 4+5: Parallel extraction ───────────────────────────────
+        // ── Steps 6+7: Parallel extraction ───────────────────────────────
         emit({ step: 'extractSource', status: 'running' });
         emit({ step: 'extractBack', status: 'running' });
         const [sourceFields, backTranslatedFields] = await Promise.all([
@@ -60,9 +85,12 @@ export async function POST(request: NextRequest) {
         emit({ step: 'extractSource', status: 'complete', result: sourceFields });
         emit({ step: 'extractBack', status: 'complete', result: backTranslatedFields });
 
-        // ── Step 6: Drift analysis + risk scoring ─────────────────────────
+        // ── Step 6: Drift analysis + diacritic validation + risk scoring ──
         emit({ step: 'analyze', status: 'running' });
-        const driftIssues = analyzeDrift(sourceFields, backTranslatedFields);
+        const driftIssues = await analyzeDrift(sourceFields, backTranslatedFields, effectiveSource, backTranslation);
+        const diacriticIssues = targetLanguage === 'Yoruba'
+          ? validateDiacritics(translation)
+          : [];
         const extractionFailed =
           sourceFields.medication_name === null &&
           sourceFields.dosage_amount === null &&
@@ -71,8 +99,9 @@ export async function POST(request: NextRequest) {
           driftIssues,
           langMeta,
           extractionFailed,
+          diacriticIssues,
         );
-        emit({ step: 'analyze', status: 'complete', result: { driftIssues, riskScore, riskLevel } });
+        emit({ step: 'analyze', status: 'complete', result: { driftIssues, diacriticIssues, riskScore, riskLevel } });
 
         // ── Step 7: Teach-back ────────────────────────────────────────────
         emit({ step: 'teachBack', status: 'running' });
@@ -93,6 +122,7 @@ export async function POST(request: NextRequest) {
           sourceFields,
           backTranslatedFields,
           driftIssues,
+          diacriticIssues,
           riskScore,
           riskLevel,
           riskExplanation,
@@ -100,6 +130,7 @@ export async function POST(request: NextRequest) {
           teachBackQuestion,
           targetLanguage,
           languageQualityWarning: langMeta.warningMessage,
+          tonalRailResult,
           timestamp: new Date().toISOString(),
         };
 

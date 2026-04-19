@@ -9,36 +9,46 @@ type Props = {
 };
 
 const RISK_DOT: Record<RiskLevel, string> = {
-  low: 'bg-green-400',
-  medium: 'bg-amber-400',
-  high: 'bg-red-400',
+  low: 'bg-green-500',
+  medium: 'bg-amber-500',
+  high: 'bg-red-500',
 };
 
 export function DemoPanel({ onSelectDemo, activeDemoId }: Props) {
   return (
-    <div className="border-t border-slate-200 bg-white px-4 py-3">
-      <div className="max-w-[1600px] mx-auto flex items-center gap-3 flex-wrap">
-        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">
-          Demo Cases:
-        </span>
-        {DEMO_CASES.map(demo => (
-          <button
-            key={demo.id}
-            onClick={() => onSelectDemo(demo)}
-            title={demo.description}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
-              activeDemoId === demo.id
-                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                : 'bg-white text-slate-700 border-slate-300 hover:border-blue-400 hover:text-blue-700'
-            }`}
+    <div className="border-t border-slate-200/60 bg-surface-container-lowest px-5 py-4">
+      <div className="max-w-[1600px] mx-auto">
+        <div className="flex items-center gap-2 mb-3">
+          <span
+            className="material-symbols-outlined text-on-surface-variant"
+            style={{ fontSize: '16px' }}
           >
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${RISK_DOT[demo.expectedRisk]}`} />
-            {demo.label}
-          </button>
-        ))}
-        <span className="text-xs text-slate-400 ml-2">
-          Click a demo to pre-fill the form, then click Analyze
-        </span>
+            science
+          </span>
+          <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
+            Demo Cases
+          </p>
+          <span className="text-[10px] text-slate-400 ml-1 font-label">
+            — select to pre-fill the form, then click Analyze
+          </span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {DEMO_CASES.map(demo => (
+            <button
+              key={demo.id}
+              onClick={() => onSelectDemo(demo)}
+              title={demo.description}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium border transition-all font-label ${
+                activeDemoId === demo.id
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-surface-container-low text-on-surface-variant border-outline-variant hover:border-primary hover:text-primary'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${RISK_DOT[demo.expectedRisk]}`} />
+              {demo.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

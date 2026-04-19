@@ -42,6 +42,49 @@ export type SimplificationResult = {
   is_ambiguous: boolean;
 };
 
+export type DiacriticIssue = {
+  bare: string;
+  canonical: string;
+  meaning: string;
+  confusableWith?: string;
+  confusableMeaning?: string;
+  severity: 'high' | 'medium';
+  category: 'numeral' | 'time' | 'frequency' | 'medical' | 'instruction';
+  context: string;
+};
+
+export type TonalIssue = {
+  expectedDigit: number;
+  foundStripped: string;
+  claudeForm: string;
+  mT5Form: string | null;
+  canonicalForm: string;
+  confusableWith: number | null;
+  confusableCanonical: string | null;
+  medicalRisk: 'critical' | 'high' | 'low';
+  issueType: 'diacritic_mismatch' | 'missing_numeral' | 'wrong_numeral' | 'mT5_unavailable';
+  explanation: string;
+};
+
+export type TonalNumeralRow = {
+  digit: number;
+  claudeForm: string;
+  canonicalForm: string;
+  encoding: 'yoruba' | 'arabic';
+  status: 'pass' | 'fail';
+  issue?: TonalIssue;
+};
+
+export type TonalRailResult = {
+  ran: boolean;
+  mT5Available: boolean;
+  issues: TonalIssue[];
+  checkedNumerals: number[];
+  numeralRows: TonalNumeralRow[];
+  passed: boolean;
+  summary: string;
+};
+
 export type AnalysisResult = {
   originalInstruction: string;
   simplificationResult: SimplificationResult;
@@ -51,6 +94,7 @@ export type AnalysisResult = {
   sourceFields: MedicationFields;
   backTranslatedFields: MedicationFields;
   driftIssues: DriftIssue[];
+  diacriticIssues: DiacriticIssue[];
   riskScore: number;
   riskLevel: RiskLevel;
   riskExplanation: string;
@@ -58,12 +102,14 @@ export type AnalysisResult = {
   teachBackQuestion: string | null;
   targetLanguage: string;
   languageQualityWarning: string | null;
+  tonalRailResult?: TonalRailResult;
   timestamp: string;
 };
 
 export type PipelineStep =
   | 'simplify'
   | 'translate'
+  | 'tonalRail'
   | 'backTranslate'
   | 'extractSource'
   | 'extractBack'

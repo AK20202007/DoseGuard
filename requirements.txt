@@ -1,0 +1,26 @@
+# Core
+httpx>=0.27.0
+pydantic>=2.7.0
+pillow>=10.3.0
+python-dotenv>=1.0.0
+
+# OCR - Engine A
+easyocr>=1.7.1
+
+# OCR - Engine B (PaddleOCR)
+paddlepaddle>=2.6.1
+paddleocr>=2.7.3
+
+# OCR - Engine C (LLaVA via HuggingFace Inference API — just needs httpx)
+# No extra install needed; uses HF_API_TOKEN from .env
+
+# Image handling
+numpy>=1.24.0
+opencv-python-headless>=4.9.0
+
+# Async
+anyio>=4.3.0
+
+# CLI
+click>=8.1.7
+rich>=13.7.0
