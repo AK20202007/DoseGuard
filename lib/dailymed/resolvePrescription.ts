@@ -444,6 +444,21 @@ export async function resolvePrescriptionFromDailyMed(
     }
   }
 
+  // If the exact query returned nothing, retry with just alphabetic characters
+  // (handles residual punctuation) and then with lowercase
+  if (spls.length === 0) {
+    const alphaOnly = query.replace(/[^a-zA-Z]/g, '');
+    if (alphaOnly && alphaOnly.toLowerCase() !== query.toLowerCase()) {
+      spls = await fetchSplsForDrugName(alphaOnly);
+    }
+  }
+  if (spls.length === 0) {
+    const lower = query.toLowerCase();
+    if (lower !== query) {
+      spls = await fetchSplsForDrugName(lower);
+    }
+  }
+
   if (spls.length === 0) {
     if (ndcQuery) {
       throw new DailyMedLookupError(`No DailyMed SPL records found for ndc="${ndcQuery}" or drug name "${query}".`);

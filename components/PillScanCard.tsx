@@ -105,9 +105,28 @@ function ResultCard({ scanResult, prescription }: { scanResult: ScanResult; pres
   );
 }
 
+const MANUFACTURER_PREFIXES = new Set([
+  'mylan', 'teva', 'sandoz', 'apotex', 'actavis', 'ranbaxy', 'aurobindo',
+  'lupin', 'accord', 'ratio', 'apo', 'dom', 'novo', 'pms', 'jamp', 'mint',
+  'pro', 'gen', 'ran', 'mar', 'nat', 'bio', 'zym', 'brand', 'pharma',
+]);
+
+function sanitizeDrugName(name: string): string {
+  let s = name
+    .replace(/\(.*?\)/g, '')        // remove (alprazolam), (500mg), etc.
+    .replace(/[™®©℠]/g, '')         // remove trademark symbols
+    .replace(/\b\w+-brand\b\s*/gi, '') // remove "Mylan-brand" style prefixes
+    .trim();
+
+  // Split on spaces and dashes, drop known manufacturer tokens, return first real word
+  const parts = s.split(/[\s-]+/).filter(Boolean);
+  const drug = parts.find(p => !MANUFACTURER_PREFIXES.has(p.toLowerCase())) ?? parts[0] ?? '';
+  return drug.trim();
+}
+
 export function PillScanCard({ initialDrugName, instructionText }: { initialDrugName: string | null; instructionText?: string }) {
   const { t } = useLang();
-  const [drugInput, setDrugInput] = useState(initialDrugName ?? '');
+  const [drugInput, setDrugInput] = useState(initialDrugName ? sanitizeDrugName(initialDrugName) : '');
   const [prescription, setPrescription] = useState<ResolvedPrescription | null>(null);
   const [loadingRx, setLoadingRx] = useState(false);
   const [rxError, setRxError] = useState<string | null>(null);
@@ -122,7 +141,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
 
   // When analysis gives us a real extracted name, use it immediately
   useEffect(() => {
-    if (initialDrugName && !prescription) setDrugInput(initialDrugName);
+    if (initialDrugName && !prescription) setDrugInput(sanitizeDrugName(initialDrugName));
   }, [initialDrugName, prescription]);
 
   // When only instructionText is available (pre-analysis), ask Claude Haiku for the drug name
@@ -154,7 +173,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
     setPrescription(null);
     setScanResult(null);
     try {
-      const rx = await fetchPrescriptionByDrugName(drugInput.trim());
+      const rx = await fetchPrescriptionByDrugName(sanitizeDrugName(drugInput));
       setPrescription(rx);
     } catch (e) {
       setRxError(e instanceof Error ? e.message : 'DailyMed lookup failed');
@@ -318,7 +337,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
             <input
               type="text"
               value={drugInput}
-              onChange={e => { setDrugInput(e.target.value); setPrescription(null); setScanResult(null); }}
+              onChange={e => { setDrugInput(sanitizeDrugName(e.target.value)); setPrescription(null); setScanResult(null); }}
               onKeyDown={e => e.key === 'Enter' && loadPrescription()}
               placeholder={t('drugNamePlaceholder')}
               className="flex-1 text-sm border border-outline-variant rounded px-3 py-2 bg-surface-container-low text-on-surface placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"

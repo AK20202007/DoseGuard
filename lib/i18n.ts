@@ -50,8 +50,24 @@ export const translations = {
     deterministicTable: 'Deterministic Comparison Table',
     verified: 'Verified',
     enterInstruction: 'Enter a medication instruction and click Analyze to see the translation pipeline',
-    // StepProgress
+    // StepProgress — labels
     pipelineProgress: 'Pipeline Progress',
+    stepSimplifyLabel: 'Reading instruction',
+    stepTranslateLabel: 'Translating',
+    stepTonalRailLabel: 'Checking tone marks',
+    stepBackTranslateLabel: 'Re-reading the translation',
+    stepExtractSourceLabel: 'Parsing original',
+    stepExtractBackLabel: 'Parsing re-read version',
+    stepAnalyzeLabel: 'Checking for errors',
+    // StepProgress — descriptions
+    stepSimplifyDesc: 'Expanding abbreviations and flagging ambiguous terms',
+    stepTranslateDesc: 'Converting to the target language',
+    stepTonalRailDesc: 'Verifying Yoruba numeral diacritics with mT5 ADR',
+    stepBackTranslateDesc: 'Translating back to English to check for changes',
+    stepExtractSourceDesc: 'Pulling out dosage, frequency, and warnings from the source',
+    stepExtractBackDesc: 'Pulling out the same fields from the re-read version',
+    stepAnalyzeDesc: 'Comparing both versions field-by-field with AI verification',
+    // StepProgress — pill CTA
     verifyPhysicalPill: 'Verify Physical Pill ↓',
     pillScanStepDesc: 'Scan or upload a photo to confirm the dispensed pill matches',
     // PillScanCard
@@ -164,8 +180,24 @@ export const translations = {
     deterministicTable: 'Tábìlì Ìfiwéra Ìdánilójú',
     verified: 'Jẹ́rìísí',
     enterInstruction: 'Tẹ ìtọ́nísọ̀nà oogun kí o tẹ Ṣayẹwo láti rí ìlànà ìtumọ̀',
-    // StepProgress
+    // StepProgress — labels
     pipelineProgress: 'Ìlọsíwájú Ìlànà',
+    stepSimplifyLabel: 'Ń ka ìtọ́nísọ̀nà',
+    stepTranslateLabel: 'Ń tumọ̀',
+    stepTonalRailLabel: 'Ń ṣayẹwo àwọn àmì ohùn',
+    stepBackTranslateLabel: 'Ń tún ka ìtumọ̀',
+    stepExtractSourceLabel: 'Ń ṣe ìtúpalẹ̀ orísun',
+    stepExtractBackLabel: 'Ń ṣe ìtúpalẹ̀ ẹ̀yà tí a tún ka',
+    stepAnalyzeLabel: 'Ń wá àṣìṣe',
+    // StepProgress — descriptions
+    stepSimplifyDesc: 'Ń fẹ àwọn àkọpọ̀ sọ̀ó àti ṣe àmì àwọn ọ̀rọ̀ àìdájú',
+    stepTranslateDesc: 'Ń yí padà sí èdè ìtumọ̀',
+    stepTonalRailDesc: 'Ń ṣayẹwo àwọn àmì ohùn nọ́mbà Yorùbá pẹ̀lú mT5 ADR',
+    stepBackTranslateDesc: 'Ń tumọ̀ padà sí Gẹ̀ẹ́sì láti ṣàyẹwò àwọn ìyípadà',
+    stepExtractSourceDesc: 'Ń yọ iye oogun, ìgbọ̀ọ̀gbọ̀, àti àwọn ìkìlọ̀ jáde',
+    stepExtractBackDesc: 'Ń yọ àwọn ààyè kanna jáde láti ẹ̀yà tí a tún ka',
+    stepAnalyzeDesc: 'Ń ṣe àfiwéra àwọn ẹ̀yà méjèjì pẹ̀lú ìjẹ́rìísí AI',
+    // StepProgress — pill CTA
     verifyPhysicalPill: 'Ṣayẹwo Oogun ↓',
     pillScanStepDesc: 'Ṣayẹwo tàbí gbe fọ́tò soke láti jẹ́rìísí oogun tí a fún',
     // PillScanCard

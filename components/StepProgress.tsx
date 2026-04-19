@@ -1,16 +1,19 @@
 'use client';
 
 import type { PipelineStep, StreamEvent } from '@/lib/types';
+import type { TKey } from '@/lib/i18n';
 import { useLang } from '@/lib/i18nContext';
 
-const STEPS: { key: PipelineStep; label: string; description: string; icon: string }[] = [
-  { key: 'simplify',      label: 'Reading instruction',        icon: 'auto_fix_high', description: 'Expanding abbreviations and flagging ambiguous terms' },
-  { key: 'translate',     label: 'Translating',                icon: 'translate',     description: 'Converting to the target language' },
-  { key: 'tonalRail',     label: 'Checking tone marks',        icon: 'spellcheck',    description: 'Verifying Yoruba numeral diacritics with mT5 ADR' },
-  { key: 'backTranslate', label: 'Re-reading the translation', icon: 'sync_alt',      description: 'Translating back to English to check for changes' },
-  { key: 'extractSource', label: 'Parsing original',           icon: 'data_object',   description: 'Pulling out dosage, frequency, and warnings from the source' },
-  { key: 'extractBack',   label: 'Parsing re-read version',    icon: 'data_object',   description: 'Pulling out the same fields from the re-read version' },
-  { key: 'analyze',       label: 'Checking for errors',        icon: 'analytics',     description: 'Comparing both versions field-by-field with AI verification' },
+type StepDef = { key: PipelineStep; labelKey: TKey; descKey: TKey; icon: string };
+
+const STEPS: StepDef[] = [
+  { key: 'simplify',      labelKey: 'stepSimplifyLabel',      descKey: 'stepSimplifyDesc',      icon: 'auto_fix_high' },
+  { key: 'translate',     labelKey: 'stepTranslateLabel',     descKey: 'stepTranslateDesc',     icon: 'translate'     },
+  { key: 'tonalRail',     labelKey: 'stepTonalRailLabel',     descKey: 'stepTonalRailDesc',     icon: 'spellcheck'    },
+  { key: 'backTranslate', labelKey: 'stepBackTranslateLabel', descKey: 'stepBackTranslateDesc', icon: 'sync_alt'      },
+  { key: 'extractSource', labelKey: 'stepExtractSourceLabel', descKey: 'stepExtractSourceDesc', icon: 'data_object'   },
+  { key: 'extractBack',   labelKey: 'stepExtractBackLabel',   descKey: 'stepExtractBackDesc',   icon: 'data_object'   },
+  { key: 'analyze',       labelKey: 'stepAnalyzeLabel',       descKey: 'stepAnalyzeDesc',       icon: 'analytics'     },
 ];
 
 type Props = {
@@ -47,54 +50,40 @@ export function StepProgress({ steps, isLoading }: Props) {
         </p>
       </div>
       <div className="p-5 space-y-3">
-        {STEPS.map(({ key, label, description, icon }) => {
+        {STEPS.map(({ key, labelKey, descKey, icon }) => {
           const event = steps.get(key);
           const status = event?.status ?? 'pending';
           return (
             <div key={key} className="flex items-start gap-3">
               <div className="w-5 h-5 flex-shrink-0 mt-0.5 flex items-center justify-center">
                 {status === 'complete' ? (
-                  <span
-                    className="material-symbols-outlined text-green-500"
-                    style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}
-                  >
+                  <span className="material-symbols-outlined text-green-500" style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>
                     check_circle
                   </span>
                 ) : status === 'running' ? (
                   <Spinner />
                 ) : status === 'error' ? (
-                  <span
-                    className="material-symbols-outlined text-red-500"
-                    style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}
-                  >
+                  <span className="material-symbols-outlined text-red-500" style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>
                     cancel
                   </span>
                 ) : (
-                  <span
-                    className="material-symbols-outlined text-slate-300"
-                    style={{ fontSize: '20px' }}
-                  >
+                  <span className="material-symbols-outlined text-slate-300" style={{ fontSize: '20px' }}>
                     {icon}
                   </span>
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <span
-                  className={`text-sm leading-tight block font-medium ${
-                    status === 'complete'
-                      ? 'text-on-surface'
-                      : status === 'running'
-                        ? 'text-primary'
-                        : status === 'error'
-                          ? 'text-red-600'
-                          : 'text-slate-400'
-                  }`}
-                >
-                  {label}
+                <span className={`text-sm leading-tight block font-medium ${
+                  status === 'complete' ? 'text-on-surface' :
+                  status === 'running'  ? 'text-primary'    :
+                  status === 'error'    ? 'text-red-600'    :
+                  'text-slate-400'
+                }`}>
+                  {t(labelKey)}
                 </span>
                 {(status === 'running' || status === 'complete') && (
                   <span className="text-xs text-on-surface-variant leading-tight font-label">
-                    {description}
+                    {t(descKey)}
                   </span>
                 )}
               </div>
@@ -102,7 +91,7 @@ export function StepProgress({ steps, isLoading }: Props) {
           );
         })}
 
-        {/* Pill scan action — appears after pipeline completes */}
+        {/* Pill scan CTA — appears after pipeline completes */}
         {isDone && (
           <button
             onClick={() =>
@@ -111,10 +100,7 @@ export function StepProgress({ steps, isLoading }: Props) {
             className="flex items-start gap-3 w-full text-left group mt-1 pt-3 border-t border-slate-100"
           >
             <div className="w-5 h-5 flex-shrink-0 mt-0.5 flex items-center justify-center">
-              <span
-                className="material-symbols-outlined text-primary animate-pulse"
-                style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}
-              >
+              <span className="material-symbols-outlined text-primary animate-pulse" style={{ fontSize: '20px', fontVariationSettings: "'FILL' 1" }}>
                 medication
               </span>
             </div>
