@@ -207,6 +207,38 @@ async def analyze(file: UploadFile = File(...)):
         except Exception as exc:
             safety_result = {"error": str(exc)}
 
+    # ── Build merged corrected text ───────────────────────────────────────────
+    # Canonical label assembled from cross-validated consensus values.
+    # Each field shows the winning value; fields with disagreement are marked [?].
+    def _display(field: str, fallback: str = "—") -> str:
+        fc = cross_check.get(field, {})
+        val = fc.get("merged_value") or fallback
+        return val if fc.get("unanimous", True) else f"{val} [disputed]"
+
+    med   = _display("medication_name")
+    dose  = _display("dose_value")
+    unit  = _display("dose_unit")
+    freq  = _display("frequency")
+
+    # Raw text from each available engine for the merged view
+    raw_texts = {
+        name: (r.get("raw_text") or "").strip()
+        for name, r in engine_results.items()
+        if r["available"] and r.get("raw_text")
+    }
+
+    merged_text = (
+        f"VERIFIED PRESCRIPTION\n"
+        f"{'─' * 40}\n"
+        f"Medication : {med}\n"
+        f"Dose       : {dose} {unit}\n"
+        f"Frequency  : {freq}\n"
+        f"{'─' * 40}\n"
+        f"Consensus  : {overall_consensus:.0%} "
+        f"({'unanimous' if all_unanimous else 'disputed — recapture required'})\n"
+        f"Engines    : {', '.join(available.keys())}"
+    )
+
     # ── Final response ────────────────────────────────────────────────────────
     return JSONResponse({
         "image_preview": f"data:image/jpeg;base64,{img_b64}",
@@ -218,6 +250,8 @@ async def analyze(file: UploadFile = File(...)):
             "overall_consensus_score": overall_consensus,
             "all_unanimous": all_unanimous,
             "status": "passed" if all_unanimous else "recapture_required",
+            "merged_text": merged_text,
+            "raw_texts": raw_texts,
         },
         "reliability": reliability,
         "layer2_safety": safety_result,

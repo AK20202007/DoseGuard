@@ -42,17 +42,58 @@ _DAILYMED_URL = os.getenv(
 _NEAR_MISS_RATIO = 0.20  # within ±20 % of a known strength
 
 
+_UNIT_ALIASES: dict[str, str] = {
+    "ug": "mcg",       # micrograms — FDA uses both spellings
+    "mcg": "mcg",
+    "mg": "mg",
+    "g": "g",
+    "ml": "ml",
+    "meq": "meq",
+    "unit": "units",
+    "units": "units",
+    "iu": "iu",
+}
+
+# Conversion table to nanograms (common base) for cross-unit comparison
+_TO_NG: dict[str, float] = {
+    "g":     1_000_000_000,
+    "mg":    1_000_000,
+    "mcg":   1_000,
+    "ug":    1_000,
+    "ng":    1,
+    "ml":    None,   # volume — not mass-convertible
+    "meq":   None,
+    "units": None,
+    "iu":    None,
+}
+
+
 def _parse_strength_label(label: str) -> tuple[float, str] | None:
-    """Parse '5 MG' → (5.0, 'mg'), '0.5 MCG' → (0.5, 'mcg')."""
+    """
+    Parse strength strings into (value, normalised_unit).
+
+    Handles:
+      '5 MG/1'     → (5.0, 'mg')
+      '.125 mg/1'  → (0.125, 'mg')   leading-dot (FDA format)
+      '125 ug/1'   → (125.0, 'mcg')  ug alias for mcg
+      '0.25 mg/mL' → (0.25, 'mg')    concentration — only value+unit captured
+    """
     m = re.match(
-        r"(\d+(?:[.,]\d+)?)\s*(mg|mcg|ml|g|meq|units?|iu)",
+        r"(\.?\d+(?:[.,]\d+)?)\s*"        # value — optional leading dot
+        r"(mg|mcg|ug|ml|g\b|meq|units?|iu)",
         label.strip(),
         re.IGNORECASE,
     )
     if not m:
         return None
-    value = float(m.group(1).replace(",", "."))
-    unit = m.group(2).lower()
+    raw_value = m.group(1).lstrip(".") or "0"   # ".125" → "125" then prepend "0."
+    # Restore proper decimal: if original started with ".", prepend "0"
+    if m.group(1).startswith("."):
+        raw_value = "0." + m.group(1)[1:]
+    else:
+        raw_value = m.group(1).replace(",", ".")
+    value = float(raw_value)
+    unit = _UNIT_ALIASES.get(m.group(2).lower(), m.group(2).lower())
     return value, unit
 
 
@@ -107,6 +148,10 @@ class DeterministicSafetyVault:
             if key not in seen:
                 seen.add(key)
                 unique_strengths.append(s)
+
+        # Remove cross-source statistical outliers (e.g. Digoxin Immune Fab 40mg
+        # appearing in DailyMed alongside true digoxin tablet strengths 0.0625-0.25mg).
+        unique_strengths = self._filter_outliers(unique_strengths)
 
         medication_verified = openfda_hit or dailymed_hit
 
@@ -200,16 +245,46 @@ class DeterministicSafetyVault:
                 for ingredient in product.get("active_ingredients", []):
                     strength_str: str = ingredient.get("strength", "")
                     parsed = _parse_strength_label(strength_str)
-                    if parsed:
-                        v, u = parsed
-                        strengths.append(
-                            DrugStrength(
-                                value=v,
-                                unit=u,
-                                label=strength_str.strip().upper(),
-                                source="openfda",
-                            )
+                    if not parsed:
+                        continue
+                    v, u = parsed
+                    # Skip non-mass units and obvious outlier entries (e.g. "1 kg/kg")
+                    if u not in ("mg", "mcg", "ug", "g"):
+                        continue
+                    strengths.append(
+                        DrugStrength(
+                            value=v,
+                            unit=u,
+                            label=strength_str.strip().upper(),
+                            source="openfda",
                         )
+                    )
+
+            # Remove statistical outliers using IQR fence on log-scale values.
+            # Catches bogus FDA entries like digoxin "40 mg/1" when all real
+            # strengths are 0.0625–0.25 mg.
+            if len(strengths) > 3:
+                import statistics, math
+                ng_vals = [
+                    DeterministicSafetyVault._to_ng(s.value, s.unit)
+                    for s in strengths
+                    if DeterministicSafetyVault._to_ng(s.value, s.unit) not in (None, 0)
+                ]
+                if len(ng_vals) > 3:
+                    log_vals = sorted(math.log10(v) for v in ng_vals)
+                    q1 = statistics.median(log_vals[: len(log_vals) // 2])
+                    q3 = statistics.median(log_vals[len(log_vals) // 2 :])
+                    iqr = q3 - q1
+                    upper_fence = q3 + 3.0 * iqr   # Tukey outer fence on log scale
+                    strengths = [
+                        s for s in strengths
+                        if (
+                            DeterministicSafetyVault._to_ng(s.value, s.unit) is None
+                            or DeterministicSafetyVault._to_ng(s.value, s.unit) == 0
+                            or math.log10(DeterministicSafetyVault._to_ng(s.value, s.unit)) <= upper_fence
+                        )
+                    ]
+
             return strengths
         except Exception:
             return []
@@ -288,6 +363,49 @@ class DeterministicSafetyVault:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _filter_outliers(strengths: list[DrugStrength]) -> list[DrugStrength]:
+        """
+        Remove statistical outliers from a combined strength list using the
+        Tukey outer-fence (3×IQR) on log-scale ng values.
+
+        Example: digoxin real strengths cluster at 62–250 ng × 1000 (mcg range).
+        Digoxin Immune Fab at 40 mg = 40,000,000 ng is 2.6 log-units above the
+        fence and gets removed.
+        """
+        import math, statistics as _stats
+
+        if len(strengths) <= 3:
+            return strengths
+
+        ng_map = {
+            id(s): DeterministicSafetyVault._to_ng(s.value, s.unit)
+            for s in strengths
+        }
+        convertible = [v for v in ng_map.values() if v and v > 0]
+        if len(convertible) <= 3:
+            return strengths
+
+        log_vals = sorted(math.log10(v) for v in convertible)
+        mid = len(log_vals) // 2
+        q1 = _stats.median(log_vals[:mid])
+        q3 = _stats.median(log_vals[mid:])
+        iqr = q3 - q1
+        upper = q3 + 3.0 * iqr
+
+        return [
+            s for s in strengths
+            if ng_map[id(s)] is None
+            or ng_map[id(s)] <= 0
+            or math.log10(ng_map[id(s)]) <= upper
+        ]
+
+    @staticmethod
+    def _to_ng(value: float, unit: str) -> float | None:
+        """Convert dose to nanograms for cross-unit comparison. Returns None if non-convertible."""
+        factor = _TO_NG.get(unit.lower())
+        return value * factor if factor is not None else None
+
+    @staticmethod
     def _match_dose(
         dose_value: float,
         dose_unit: str,
@@ -295,21 +413,38 @@ class DeterministicSafetyVault:
     ) -> tuple[bool, Optional[DrugStrength]]:
         """
         Return (exact_match_found, nearest_strength).
-        Unit normalisation: mg == mg, mcg == mcg, etc.
+
+        Matching strategy (in priority order):
+          1. Same unit, value within floating-point epsilon
+          2. Cross-unit: convert both to ng and compare (catches 0.125 mg == 125 mcg)
+          3. Nearest known strength reported for UI context
         """
         if not known:
-            # No reference data → cannot verify → treat as unverified (not impossible)
             return False, None
 
-        unit_norm = dose_unit.lower().strip()
-        same_unit = [s for s in known if s.unit == unit_norm]
-        pool = same_unit if same_unit else known  # fallback to all if unit unknown
+        unit_norm = _UNIT_ALIASES.get(dose_unit.lower().strip(), dose_unit.lower().strip())
+        dose_ng = DeterministicSafetyVault._to_ng(dose_value, unit_norm)
 
-        # Exact match
-        for s in pool:
-            if s.value == dose_value:
+        # Pass 1 — same unit, float-safe equality (epsilon 0.001 handles rounding)
+        for s in known:
+            if s.unit == unit_norm and abs(s.value - dose_value) < 1e-3:
                 return True, s
 
-        # Find nearest for informational purposes
-        nearest = min(pool, key=lambda s: abs(s.value - dose_value))
+        # Pass 2 — cross-unit via nanogram conversion (e.g. 0.125 mg ↔ 125 mcg)
+        if dose_ng is not None:
+            for s in known:
+                s_ng = DeterministicSafetyVault._to_ng(s.value, s.unit)
+                if s_ng is not None and abs(s_ng - dose_ng) < 1e-3:
+                    return True, s
+
+        # No match — find nearest for UI display
+        def _dist(s: DrugStrength) -> float:
+            s_ng = DeterministicSafetyVault._to_ng(s.value, s.unit)
+            if dose_ng is not None and s_ng is not None:
+                return abs(s_ng - dose_ng)
+            if s.unit == unit_norm:
+                return abs(s.value - dose_value)
+            return float("inf")
+
+        nearest = min(known, key=_dist)
         return False, nearest

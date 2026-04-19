@@ -132,6 +132,22 @@
     border: 2px solid;
   }
 
+  /* Merged text output */
+  .merged-text-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+  .merged-text-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; background: var(--surface2); border-bottom: 1px solid var(--border); }
+  .merged-text-body { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+  .mtext-col { padding: 16px 18px; border-right: 1px solid var(--border); }
+  .mtext-col:last-child { border-right: none; }
+  .mtext-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  .mtext-pre { font-family: var(--mono); font-size: 13px; line-height: 1.8; white-space: pre-wrap; color: var(--text); }
+  .mtext-pre .disputed { color: var(--yellow); }
+  .mtext-pre .verified { color: var(--green); }
+  .raw-tabs { display: flex; gap: 6px; padding: 10px 18px; border-top: 1px solid var(--border); flex-wrap: wrap; }
+  .raw-tab { padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; background: var(--surface2); border: 1px solid var(--border); color: var(--muted); transition: all .15s; }
+  .raw-tab.active { background: #1e2d4a; border-color: var(--accent); color: var(--accent); }
+  .raw-tab-content { display: none; padding: 12px 18px; font-family: var(--mono); font-size: 11px; color: #94a3b8; white-space: pre-wrap; line-height: 1.6; border-top: 1px solid var(--border); max-height: 200px; overflow-y: auto; }
+  .raw-tab-content.active { display: block; }
+
   /* Layer 2 safety */
   .safety-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; padding: 18px; }
   .safety-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 10px; }
@@ -246,6 +262,9 @@
         <tbody id="xcheck-body"></tbody>
       </table>
     </div>
+
+    <!-- Merged corrected output -->
+    <div id="merged-text-section"></div>
 
     <!-- Layer 2 safety -->
     <div id="safety-section"></div>
@@ -427,6 +446,56 @@ function render(d) {
     </tr>`;
   }).join('');
 
+  // ── Merged corrected text ─────────────────────────────────────────────────
+  const mts = document.getElementById('merged-text-section');
+  const mergedText = d.merged?.merged_text || '';
+  const rawTexts   = d.merged?.raw_texts || {};
+
+  // Colour disputed tokens in the merged text
+  const coloredText = escHtml(mergedText)
+    .replace(/\[disputed\]/g, '<span class="disputed">[disputed ⚠]</span>')
+    .replace(/(VERIFIED PRESCRIPTION)/g, '<span class="verified">$1</span>');
+
+  // Raw text tabs (one per engine that returned text)
+  const tabIds = Object.keys(rawTexts);
+  const tabButtons = tabIds.map((name, i) =>
+    `<span class="raw-tab ${i===0?'active':''}" onclick="switchRawTab(this,'raw-${name}')">${name}</span>`
+  ).join('');
+  const tabPanels = tabIds.map((name, i) =>
+    `<div id="raw-${name}" class="raw-tab-content ${i===0?'active':''}">${escHtml(rawTexts[name] || '(empty)')}</div>`
+  ).join('');
+
+  mts.innerHTML = `
+    <div class="section-title">Merged &amp; Corrected OCR Output</div>
+    <div class="merged-text-card">
+      <div class="merged-text-header">
+        <span style="font-size:13px;font-weight:600">Cross-validated prescription — consensus values only</span>
+        <span class="conf ${d.merged.all_unanimous ? 'conf-high' : 'conf-mid'}" style="font-size:12px">
+          ${d.merged.all_unanimous ? '✓ Unanimous' : '⚠ Disputed'}
+        </span>
+      </div>
+      <div class="merged-text-body">
+        <div class="mtext-col">
+          <div class="mtext-label">Verified Output</div>
+          <pre class="mtext-pre">${coloredText}</pre>
+        </div>
+        <div class="mtext-col">
+          <div class="mtext-label">Field Confidence</div>
+          ${Object.entries(d.cross_check).map(([f, fc]) => `
+            <div style="margin-bottom:10px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+                <span style="color:var(--muted)">${f.replace(/_/g,' ')}</span>
+                <span style="font-weight:600;color:${scoreColor(fc.agreement_score)}">${fc.merged_value ?? '—'}</span>
+              </div>
+              <div class="rel-bar"><div class="rel-fill" style="width:${fc.agreement_score*100}%;background:${scoreColor(fc.agreement_score)}"></div></div>
+            </div>`).join('')}
+        </div>
+      </div>
+      ${tabIds.length ? `
+      <div class="raw-tabs"><span style="font-size:11px;color:var(--muted);margin-right:4px">Raw OCR:</span>${tabButtons}</div>
+      ${tabPanels}` : ''}
+    </div>`;
+
   // ── Layer 2 safety ────────────────────────────────────────────────────────
   const ss = document.getElementById('safety-section');
   const s2 = d.layer2_safety;
@@ -486,6 +555,13 @@ function render(d) {
       ${strengthsHtml}
       ${impossHtml}
     </div>`;
+}
+
+function switchRawTab(btn, panelId) {
+  btn.closest('.merged-text-card').querySelectorAll('.raw-tab').forEach(t => t.classList.remove('active'));
+  btn.closest('.merged-text-card').querySelectorAll('.raw-tab-content').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId)?.classList.add('active');
 }
 
 function toggleJson(el) {
