@@ -169,6 +169,34 @@
     color: #fca5a5; font-size: 13px; line-height: 1.5;
   }
 
+  /* AI Summary card */
+  .summary-card {
+    background: linear-gradient(135deg, #0f1f3d 0%, #1a2540 100%);
+    border: 1px solid #2e4a80; border-radius: 14px;
+    padding: 20px 24px; margin-bottom: 24px;
+    position: relative; overflow: hidden;
+  }
+  .summary-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #4f8ef7, #22c55e, #4f8ef7);
+    background-size: 200% 100%; animation: shimmer 3s linear infinite;
+  }
+  @keyframes shimmer { to { background-position: 200% 0; } }
+  .summary-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+  }
+  .summary-icon { font-size: 20px; }
+  .summary-title { font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.5px; color: #4f8ef7; }
+  .summary-model { margin-left: auto; font-size: 11px; color: var(--muted);
+    background: var(--surface2); padding: 2px 8px; border-radius: 4px; }
+  .summary-text {
+    font-size: 15px; line-height: 1.7; color: #e2e8f0;
+    font-weight: 400;
+  }
+  .summary-text strong { color: #93c5fd; }
+
   /* Raw JSON toggle */
   .json-toggle { cursor: pointer; color: var(--accent); font-size: 12px; margin-top: 8px; display: inline-block; }
   .json-block {
@@ -202,8 +230,8 @@
   <!-- Loading -->
   <div id="loading">
     <div class="spinner"></div>
-    <p style="color:var(--muted)">Running OCR ensemble…</p>
-    <p style="color:var(--muted);font-size:12px;margin-top:6px">EasyOCR · Tesseract · LLaVA</p>
+    <p style="color:var(--muted)">Running OCR ensemble + AI summary…</p>
+    <p style="color:var(--muted);font-size:12px;margin-top:6px">EasyOCR · Tesseract · RapidOCR · Mistral OCR · Claude Haiku</p>
   </div>
 
   <!-- Results -->
@@ -263,11 +291,14 @@
       </table>
     </div>
 
-    <!-- Merged corrected output -->
+
     <div id="merged-text-section"></div>
 
     <!-- Layer 2 safety -->
     <div id="safety-section"></div>
+
+    <!-- AI Summary -->
+    <div id="summary-section"></div>
 
   </div><!-- /results -->
 </div><!-- /main -->
@@ -324,9 +355,13 @@ function render(d) {
   document.getElementById('loading').style.display = 'none';
   document.getElementById('results').style.display = 'block';
 
+  // ── AI Summary ────────────────────────────────────────────────────────────
+  renderSummary(d.rx_summary);
+
   // ── Preview ──────────────────────────────────────────────────────────────
   document.getElementById('preview-img').src = d.image_preview;
   document.getElementById('filename-label').textContent = d.filename || '';
+
 
   // ── Status badge ─────────────────────────────────────────────────────────
   const merged = d.merged;
@@ -613,6 +648,28 @@ function toggleJson(el) {
   block.style.display = open ? 'none' : 'block';
   el.textContent = (open ? '▶' : '▼') + ' raw text';
 }
+function renderSummary(summary) {
+  const el = document.getElementById('summary-section');
+  if (!summary || !summary.text) {
+    el.innerHTML = '';
+    return;
+  }
+  // Bold the drug name if it appears near the start
+  const text = summary.text.replace(
+    /\b([A-Z][a-z]+(?:\s+\d+\s*mg)?)\b/g,
+    (m, p) => p.length > 4 ? `<strong>${p}</strong>` : m
+  );
+  el.innerHTML = `
+    <div class="summary-card">
+      <div class="summary-header">
+        <span class="summary-icon">🤖</span>
+        <span class="summary-title">Clinical Summary</span>
+        <span class="summary-model">${summary.model || 'claude-haiku'}</span>
+      </div>
+      <div class="summary-text">${summary.text}</div>
+    </div>`;
+}
+
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }

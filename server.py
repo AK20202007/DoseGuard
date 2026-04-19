@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import io
+import os
 import time
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from PIL import Image
 from pipeline.ocr_engines.easyocr_engine import EasyOCREngine
 from pipeline.ocr_engines.tesseract_engine import TesseractEngine
 from pipeline.ocr_engines.rapidocr_engine import RapidOCREngine
+from pipeline.ocr_engines.mistral_ocr_engine import MistralOCREngine
 from pipeline.layer2_safety_vault import DeterministicSafetyVault
 from pipeline.models import ConsensusResult, FieldConsensus, ExtractedPrescription
 from pipeline.drug_name_validator import extract_word_candidates, validate_drug_name
@@ -42,14 +44,15 @@ _engines: dict[str, Any] = {}
 
 def _get_engines():
     if not _engines:
-        _engines["easyocr"]    = EasyOCREngine()
-        _engines["tesseract"]  = TesseractEngine()
-        _engines["rapidocr"]   = RapidOCREngine()    # free, local ONNX
+        _engines["easyocr"]     = EasyOCREngine()
+        _engines["tesseract"]   = TesseractEngine()
+        _engines["rapidocr"]    = RapidOCREngine()    # free, local ONNX
+        _engines["mistral_ocr"] = MistralOCREngine()  # Mistral OCR API
     return _engines
 
 CRITICAL_FIELDS = ("medication_name", "dose_value", "dose_unit")
 SECONDARY_FIELDS = ("frequency",)
-CONSENSUS_MINIMUM = 2 / 3   # 2 of 3 engines must agree to proceed
+CONSENSUS_MINIMUM = 0.5   # 2 of 4 engines must agree (mistral counts heavily)
 
 def _norm(val):
     if val is None:
@@ -168,33 +171,55 @@ async def analyze(file: UploadFile = File(...)):
     critical_scores = [cross_check[f]["agreement_score"] for f in CRITICAL_FIELDS]
     overall_consensus = round(min(critical_scores) if critical_scores else 0.0, 4)
     all_unanimous = all(cross_check[f]["unanimous"] for f in CRITICAL_FIELDS)
-    majority_reached = overall_consensus >= CONSENSUS_MINIMUM   # 2/3 threshold
+    majority_reached = overall_consensus >= CONSENSUS_MINIMUM
 
-    # Confidence tier
+    # Confidence tier (4 engines: easyocr, tesseract, rapidocr, mistral_ocr)
+    n_available = len(available) if "available" in dir() else 4
     if all_unanimous:
-        confidence_tier = "unanimous_3_of_3"
+        confidence_tier = "unanimous_all"
     elif majority_reached:
-        confidence_tier = "majority_2_of_3"
+        confidence_tier = "majority_2_of_4"
     else:
         confidence_tier = "recapture_required"
 
-    # ── LLM field extraction (Ollama/Mistral — free, local) ──────────────────
-    # Takes combined OCR text and asks a local LLM to extract fields.
-    # Handles pharmacy-label formats like "Take 1 tablet by mouth every day".
+    # ── Gemini Vision verification (primary) + Ollama fallback ──────────────
+    # Gemini looks at the ACTUAL IMAGE to verify/correct OCR output.
+    # Each model's raw text is shown to Gemini so it can spot disagreements.
     all_raw = " ".join(
         r.get("raw_text", "") for r in engine_results.values() if r.get("raw_text")
     )
-    llm_fields = await llm_extract_fields(all_raw, timeout=12.0)
+    # Format per-engine readings for Gemini's context
+    engine_readings = "\n".join(
+        f"  {name}: {(r.get('fields') or {}).get('medication_name','?')} | "
+        f"{(r.get('fields') or {}).get('dose_value','?')} "
+        f"{(r.get('fields') or {}).get('dose_unit','?')} | "
+        f"{(r.get('fields') or {}).get('frequency','?')}"
+        for name, r in engine_results.items() if r.get("available")
+    )
+    llm_fields = await llm_extract_fields(
+        engine_readings or all_raw,
+        timeout=15.0,
+        image=img,   # pass actual image → Gemini Vision
+    )
     llm_used = llm_fields is not None
     llm_model = (llm_fields or {}).get("llm_model", "")
 
-    # Fill in missing fields from LLM if OCR engines missed them
-    for field in ("medication_name", "dose_value", "dose_unit", "frequency"):
-        if merged_fields.get(field) is None and llm_fields and llm_fields.get(field) is not None:
-            merged_fields[field] = str(llm_fields[field]) if field == "dose_value" else llm_fields[field]
-            if field in cross_check:
-                cross_check[field]["merged_value"] = merged_fields[field]
-                cross_check[field]["llm_filled"] = True
+    # Apply Gemini output to merged fields:
+    #   - Gemini Vision: always override (it sees the actual image)
+    #   - Ollama text: only fill in blanks
+    gemini_is_vision = llm_model and "vision" in llm_model
+    if llm_fields:
+        for field in ("medication_name", "dose_value", "dose_unit", "frequency"):
+            llm_val = llm_fields.get(field)
+            if llm_val is None:
+                continue
+            llm_val_str = str(llm_val) if field == "dose_value" else llm_val
+            if gemini_is_vision or merged_fields.get(field) is None:
+                merged_fields[field] = llm_val_str
+                if field in cross_check:
+                    cross_check[field]["merged_value"] = llm_val_str
+                    cross_check[field]["gemini_verified"] = gemini_is_vision
+                    cross_check[field]["llm_filled"] = True
 
     # ── FDA drug-name cross-reference + spelling validation ───────────────────
     # Check EVERY unique name each engine returned against OpenFDA.
@@ -250,9 +275,9 @@ async def analyze(file: UploadFile = File(...)):
     all_unanimous = all(cross_check[f]["unanimous"] for f in CRITICAL_FIELDS)
     majority_reached = overall_consensus >= CONSENSUS_MINIMUM
     if all_unanimous:
-        confidence_tier = "unanimous_3_of_3"
+        confidence_tier = "unanimous_all"
     elif majority_reached:
-        confidence_tier = "majority_2_of_3"
+        confidence_tier = "majority_2_of_4"
     else:
         confidence_tier = "recapture_required"
 
@@ -349,6 +374,19 @@ async def analyze(file: UploadFile = File(...)):
         f"Engines    : {', '.join(available.keys())}"
     )
 
+    # ── LLM plain-English summary ─────────────────────────────────────────────
+    rx_summary = await generate_rx_summary(
+        medication_name=merged_fields.get("medication_name"),
+        dose_value=merged_fields.get("dose_value"),
+        dose_unit=merged_fields.get("dose_unit"),
+        frequency=merged_fields.get("frequency"),
+        fda_verified=bool(fda_name),
+        fda_name=fda_name,
+        known_strengths=(
+            (safety_result or {}).get("known_strengths") or []
+        ),
+    )
+
     # ── Final response ────────────────────────────────────────────────────────
     return JSONResponse({
         "image_preview": f"data:image/jpeg;base64,{img_b64}",
@@ -374,8 +412,61 @@ async def analyze(file: UploadFile = File(...)):
             "model": llm_model,
             "fields": llm_fields,
         },
+        "rx_summary": rx_summary,
     })
 
+
+async def generate_rx_summary(
+    medication_name: str | None,
+    dose_value: str | float | None,
+    dose_unit: str | None,
+    frequency: str | None,
+    fda_verified: bool,
+    fda_name: str | None,
+    known_strengths: list[str],
+) -> dict:
+    """
+    Build a plain-English prescription summary from structured consensus fields.
+    Completely free -- no LLM call, no API key needed.
+    """
+    if not medication_name:
+        return {"text": None, "model": "template", "error": "No medication detected"}
+
+    name = (fda_name or medication_name).title()
+    dose_str = f"{dose_value} {dose_unit}".strip() if dose_value else None
+
+    # Sentence 1: drug + dose
+    s1 = (
+        f"This prescription is for {name} {dose_str}."
+        if dose_str else
+        f"This prescription is for {name} (dose not detected on label)."
+    )
+
+    # Sentence 2: frequency, noting source
+    s2 = (
+        f"Per the prescription label, it should be taken {frequency}."
+        if frequency else
+        "The dosing frequency was not clearly detected on this label."
+    )
+
+    # Sentence 3: FDA verification + known strengths
+    if fda_verified and known_strengths:
+        strengths_str = ", ".join(known_strengths[:4])
+        dose_match = dose_str and any(
+            dose_str.replace(" ", "").lower() in s.replace(" ", "").lower()
+            for s in known_strengths
+        )
+        s3 = (
+            f"FDA/DailyMed confirms this drug and strength are valid (known strengths: {strengths_str})."
+            if dose_match else
+            f"FDA/DailyMed verified this drug exists; known approved strengths include: {strengths_str}."
+        )
+    elif fda_verified:
+        s3 = "FDA/DailyMed verified this drug, though specific strength data was unavailable."
+    else:
+        s3 = "This drug could not be verified against FDA/DailyMed -- clinical review recommended."
+
+    return {"text": f"{s1} {s2} {s3}", "model": "template (no LLM)", "error": None}
 
 if __name__ == "__main__":
     import uvicorn
