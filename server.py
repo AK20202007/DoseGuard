@@ -251,11 +251,13 @@ async def analyze(file: UploadFile = File(...)):
     fda_confirmed_majority = fda_name and engines_matching_fda >= 2
     fda_confirmed_any = fda_name and engines_matching_fda >= 1
 
-    if fda_name and (not ocr_name or fda_score >= 0.75 or fda_confirmed_majority):
+    # FDA is the definitive drug name source.
+    # Scan ALL raw OCR words → whichever matches FDA wins.
+    # Threshold 0.60 catches garbled reads (ETFORMINHCL→metformin, EMAGLUTIDE→semaglutide).
+    if fda_name and fda_score >= 0.55:   # 0.55 catches garbled OCR reads
         merged_fields["medication_name"] = fda_name.lower()
         cross_check["medication_name"]["merged_value"] = fda_name.lower()
         cross_check["medication_name"]["fda_validated"] = True
-        # Boost agreement score when FDA confirms 2+ engines
         if fda_confirmed_majority:
             boosted = min(1.0, cross_check["medication_name"]["agreement_score"] + 0.20)
             cross_check["medication_name"]["agreement_score"] = round(boosted, 4)

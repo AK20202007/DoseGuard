@@ -69,7 +69,11 @@ _SKIP_WORDS = {
     "usp", "nf", "ip", "bp", "ep", "ph", "eur", "who", "gmp",
     # Frequency / timing words (must not be mistaken for drug names)
     "once", "twice", "daily", "weekly", "monthly", "bedtime", "needed",
-    "morning", "evening", "night", "before", "after", "meals", "food",
+    "morning", "midday", "evening", "night", "before", "after", "meals", "food",
+    # Route / administration words
+    "route", "subcutaneous", "intravenous", "intramuscular", "injection",
+    "injectable", "infusion", "administer", "syringe", "units", "needles",
+    "orally", "mouth", "tablet", "tablets", "capsule", "capsules",
     # Common label filler
     "for", "use", "only", "store", "keep", "below", "above", "room",
     "each", "contains", "caution", "warning", "sterile", "mucolytic",
@@ -83,11 +87,17 @@ _SKIP_WORDS = {
     "sulfate", "sulphate", "phosphate", "succinate", "maleate", "tartrate",
     "acetate", "citrate", "besylate", "mesylate", "fumarate", "valerate",
     "bromide", "chloride", "nitrate", "oxide", "hydroxide", "gluconate",
-    # Company / brand qualifiers
+    # Company / brand qualifiers — NEVER a drug name
     "brand", "generic", "registered", "trademark",
     "pharmaceuticals", "pharma", "healthcare", "laboratory", "laboratories",
     "industries", "limited", "pvt", "ltd", "inc", "corp", "company",
     "manufacturing", "manufacturers", "formulations", "enterprises",
+    # Known pharmaceutical company brand names (not drug names)
+    "morningside", "aurobindo", "teva", "mylan", "sandoz", "novartis",
+    "pfizer", "merck", "abbvie", "roche", "bayer", "sanofi", "glaxo",
+    "astrazeneca", "lilly", "boehringer", "ingelheim", "apotex", "ranbaxy",
+    "cipla", "sun", "torrent", "lupin", "alembic", "glenmark", "alkem",
+    "zydus", "cadila", "wockhardt", "ipca", "mankind", "abbott",
     # Numeric words
     "one", "two", "three", "four", "five", "six",
 }
@@ -97,8 +107,8 @@ _DRUG_SUFFIXES = re.compile(
     r"(mab|nib|zole|pril|artan|olol|statin|mycin|cillin|cycline|"
     r"oxacin|vir|azole|tidine|prazole|dipine|formin|gliptin|gliflozin|"
     r"afib|umab|ximab|zumab|kinase|tinib|rafenib|olimus|asone|solone|"
-    r"cortisone|prednis|cept|ept|mide|amide|azine|iazide|oxib|phen|"
-    r"amine|azepam|diazepam|barb|dol|tol|ide|ite|ate|ase|ine|one)$",
+    r"cortisone|prednis|cept|ept|mide|amide|sulfonamide|azine|iazide|oxib|phen|"
+    r"amine|azepam|diazepam|barb|dol|tol|ate|ase|ine|one)$",
     re.IGNORECASE,
 )
 
@@ -245,14 +255,19 @@ def extract_medication_name(text: str) -> Optional[str]:
         if not _is_skip(candidate):
             return candidate.title()
 
-    # ── Strategy 6: best-scored candidate ────────────────────────────────────
+    # ── Strategy 6: best-scored candidate (minimum score 3 = length≥6) ──────
+    # Words like "Ning" (score 2), "Route" (score 2) are excluded.
+    # Real drug names score ≥ 5 (length + suffix bonus).
+    _MIN_SCORE = 3
     candidates: list[tuple[int, str]] = []
     for word in re.split(r"[\s\n]+", cleaned):
         c = _clean_word(word)
         if _is_skip(c) or not re.match(r"^[A-Za-z]", c):
             continue
         if c[0].isupper() or c.isupper():
-            candidates.append((_score_candidate(c), c))
+            score = _score_candidate(c)
+            if score >= _MIN_SCORE:
+                candidates.append((score, c))
 
     if candidates:
         candidates.sort(key=lambda x: -x[0])

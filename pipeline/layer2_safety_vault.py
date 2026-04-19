@@ -414,62 +414,60 @@ class DeterministicSafetyVault:
         """
         Return (dose_verified, nearest_strength).
 
-        Matching strategy (3 passes, progressively more lenient):
-          1. Exact match — same unit, within float epsilon (exact FDA/DailyMed hit)
-          2. Cross-unit — convert to ng (catches 0.125mg == 125mcg)
-          3. Reasonable range — within ±30% of any known strength OR within ±2 units
-             for small doses. Catches OCR rounding errors (e.g. 48mg read as 50mg,
-             98mg read as 100mg) without being so loose as to pass truly wrong doses.
-             A dose 10× outside all known strengths is still flagged as impossible.
+        Logic:
+          1. Convert all known strengths + extracted dose to nanograms (common base).
+          2. Pass if dose ≤ max_known × CEILING_MULTIPLE (default 2.0).
+             This accepts any dose that is plausibly within the drug's real range —
+             OCR rounding, unusual compounding, or concentration variants all pass.
+          3. Fail (Clinical Impossibility) if dose > max_known × CEILING_MULTIPLE.
+          4. Also check the lower floor: dose must be ≥ min_known × FLOOR_FRACTION
+             to catch gross OCR underreads (e.g. Metformin 5mg when min is 500mg).
+          5. Cross-unit: mg/mcg/g converted to ng before comparison so 0.125mg
+             correctly matches 125mcg in the same pool.
+          6. If no unit-convertible strengths exist, falls back to same-unit comparison.
         """
         if not known:
             return False, None
 
+        # How far above the maximum known strength we still accept
+        CEILING_MULTIPLE = 2.0
+        # How far below the minimum known strength we still accept
+        FLOOR_FRACTION = 0.1
+
         unit_norm = _UNIT_ALIASES.get(dose_unit.lower().strip(), dose_unit.lower().strip())
         dose_ng = DeterministicSafetyVault._to_ng(dose_value, unit_norm)
 
-        # ── Pass 1: exact same-unit match ───────────────────────────────────
-        for s in known:
-            if s.unit == unit_norm and abs(s.value - dose_value) < 1e-3:
-                return True, s
+        # Build ng values for all known strengths
+        known_ng: list[float] = [
+            v for s in known
+            if (v := DeterministicSafetyVault._to_ng(s.value, s.unit)) is not None and v > 0
+        ]
 
-        # ── Pass 2: cross-unit match (mg ↔ mcg etc.) ────────────────────────
-        if dose_ng is not None:
-            for s in known:
-                s_ng = DeterministicSafetyVault._to_ng(s.value, s.unit)
-                if s_ng is not None and abs(s_ng - dose_ng) < 1e-3:
-                    return True, s
+        if dose_ng is not None and known_ng:
+            max_ng = max(known_ng)
+            min_ng = min(known_ng)
+            ceiling = max_ng * CEILING_MULTIPLE
+            floor   = min_ng * FLOOR_FRACTION
 
-        # ── Pass 3: reasonable range match ──────────────────────────────────
-        # Allows ±30% tolerance to handle OCR rounding, label formatting
-        # variants, and concentration vs per-tablet discrepancies.
-        # Hard ceiling: if dose is >5× larger than the biggest known strength
-        # → still a Clinical Impossibility.
-        _TOLERANCE = 0.30
-        _MAX_MULTIPLIER = 5.0
+            if floor <= dose_ng <= ceiling:
+                # Dose is within [min×0.1, max×2] — verified
+                nearest = min(known, key=lambda s: abs(
+                    (DeterministicSafetyVault._to_ng(s.value, s.unit) or 0) - dose_ng
+                ))
+                return True, nearest
+            # Outside range → not verified (will be flagged as impossibility upstream)
 
-        def _near(s: DrugStrength) -> bool:
-            s_ng = DeterministicSafetyVault._to_ng(s.value, s.unit)
-            if dose_ng is not None and s_ng is not None and s_ng > 0:
-                ratio = dose_ng / s_ng
-                return 1 - _TOLERANCE <= ratio <= 1 + _TOLERANCE
-            if s.unit == unit_norm and s.value > 0:
-                ratio = dose_value / s.value
-                return 1 - _TOLERANCE <= ratio <= 1 + _TOLERANCE
-            return False
-
-        nearest_candidate = None
-        for s in known:
-            if _near(s):
-                # Also enforce the hard ceiling: dose must not be >5× max known
-                max_known_ng = max(
-                    (DeterministicSafetyVault._to_ng(k.value, k.unit) or 0) for k in known
-                )
-                if dose_ng is not None and max_known_ng > 0 and dose_ng > max_known_ng * _MAX_MULTIPLIER:
-                    break   # exceeds ceiling → not a range match
-                return True, s
-            if nearest_candidate is None:
-                nearest_candidate = s
+        else:
+            # No convertible units — fall back to same-unit max comparison
+            same_unit = [s for s in known if s.unit == unit_norm]
+            if same_unit:
+                max_val = max(s.value for s in same_unit)
+                min_val = min(s.value for s in same_unit)
+                ceiling = max_val * CEILING_MULTIPLE
+                floor   = min_val * FLOOR_FRACTION
+                if floor <= dose_value <= ceiling:
+                    nearest = min(same_unit, key=lambda s: abs(s.value - dose_value))
+                    return True, nearest
 
         # ── Find nearest for UI context ──────────────────────────────────────
         def _dist(s: DrugStrength) -> float:

@@ -509,7 +509,7 @@ function render(d) {
     const fdaBanner = document.createElement('div');
     fdaBanner.style.cssText = `background:#1a1d27;border:1px solid ${color};border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px`;
     fdaBanner.innerHTML = `
-      <span style="font-size:20px">🔬</span>
+      <span style="font-size:13px;font-weight:700;color:var(--accent)">FDA</span>
       <div>
         <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">FDA Cross-Reference</div>
         <div style="font-size:16px;font-weight:700;color:${color};margin-top:2px">${fda.validated_name}</div>
@@ -610,15 +610,7 @@ function render(d) {
 
   const extractedDose = s2.extracted_dose_label ? `<div style="font-size:13px;margin-top:10px">Extracted dose: <strong>${s2.extracted_dose_label}</strong></div>` : '';
 
-  const strengths = (s2.known_strengths || []);
-  const extracted = s2.extracted_dose_label?.toLowerCase().replace(' ','') || '';
-  const strengthsHtml = strengths.length ? `
-    <div class="strengths">Known strengths:
-      ${strengths.map(s => {
-        const isMatch = s.toLowerCase().replace(/[^a-z0-9.]/g,'').includes(extracted.replace(/[^a-z0-9.]/g,''));
-        return `<span class="strength-pill ${isMatch ? 'match' : ''}">${s}</span>`;
-      }).join('')}
-    </div>` : '';
+  const strengthsHtml = '';   // known strengths removed from summary per user request
 
   const impossHtml = s2.clinical_impossibility && s2.impossibility_reason
     ? `<div class="impossibility-msg">⛔ ${s2.impossibility_reason}</div>` : '';
