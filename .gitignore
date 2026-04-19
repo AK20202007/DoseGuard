@@ -1,0 +1,9 @@
+node_modules/
+.next/
+.local-build/
+artifacts/
+.claude/
+9c078df2400e740ac51913388ed1959f426cfaff3b93fbbb8c5acd8dd3c0acdd.png
+CV Debug Pipeline.png
+acetaminophen-325-mg-44-104-4411.jpg
+.DS_Store
