@@ -15,6 +15,7 @@ import { PipelinePanel } from '@/components/PipelinePanel';
 import { RiskPanel } from '@/components/RiskPanel';
 import { DemoPanel } from '@/components/DemoPanel';
 import { AuditLog } from '@/components/AuditLog';
+import DemoApp from '@/components/demo/DemoApp';
 
 export default function Home() {
   const [instruction, setInstruction] = useState('');
@@ -26,6 +27,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
   const [activeDemoId, setActiveDemoId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'analyze' | 'pillscan'>('analyze');
 
   const fetchAuditLog = useCallback(async () => {
     try {
@@ -129,15 +131,38 @@ export default function Home() {
         </div>
 
         <nav className="flex-1 space-y-1">
-          <div className="flex items-center gap-3 px-3 py-2.5 bg-white text-blue-700 font-bold rounded shadow-sm translate-x-1 cursor-default">
+          <button
+            onClick={() => setActiveTab('analyze')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded transition-all text-left ${
+              activeTab === 'analyze'
+                ? 'bg-white text-blue-700 font-bold shadow-sm translate-x-1'
+                : 'text-slate-500 hover:bg-white/60'
+            }`}
+          >
             <span
               className="material-symbols-outlined text-xl"
-              style={{ fontVariationSettings: "'FILL' 1" }}
+              style={{ fontVariationSettings: activeTab === 'analyze' ? "'FILL' 1" : "'FILL' 0" }}
             >
               health_and_safety
             </span>
             <span className="text-sm">Analyze</span>
-          </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('pillscan')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded transition-all text-left ${
+              activeTab === 'pillscan'
+                ? 'bg-white text-blue-700 font-bold shadow-sm translate-x-1'
+                : 'text-slate-500 hover:bg-white/60'
+            }`}
+          >
+            <span
+              className="material-symbols-outlined text-xl"
+              style={{ fontVariationSettings: activeTab === 'pillscan' ? "'FILL' 1" : "'FILL' 0" }}
+            >
+              medication
+            </span>
+            <span className="text-sm">Pill Scanner</span>
+          </button>
           <div
             className={`flex items-center gap-3 px-3 py-2.5 rounded cursor-default transition-all ${
               activeDemoId
@@ -160,10 +185,6 @@ export default function Home() {
                 {auditLog.length}
               </span>
             )}
-          </div>
-          <div className="flex items-center gap-3 px-3 py-2.5 text-slate-400 cursor-default">
-            <span className="material-symbols-outlined text-xl">analytics</span>
-            <span className="text-sm">Risk Monitor</span>
           </div>
         </nav>
 
@@ -243,34 +264,42 @@ export default function Home() {
           </div>
         )}
 
-        {/* 3-Column Grid */}
-        <div className="p-5 grid grid-cols-12 gap-5 flex-1 items-start max-w-[1600px] w-full mx-auto">
-          <div className="col-span-12 md:col-span-3">
-            <InputPanel
-              instruction={instruction}
-              setInstruction={setInstruction}
-              targetLanguage={targetLanguage}
-              setTargetLanguage={setTargetLanguage}
-              useSimplification={useSimplification}
-              setUseSimplification={setUseSimplification}
-              onAnalyze={handleAnalyze}
-              isLoading={isLoading}
-              simplificationResult={simplificationResult}
-            />
-          </div>
-          <div className="col-span-12 md:col-span-6">
-            <PipelinePanel steps={steps} finalResult={finalResult} isLoading={isLoading} />
-          </div>
-          <div className="col-span-12 md:col-span-3">
-            <RiskPanel finalResult={finalResult} isLoading={isLoading} />
-          </div>
-        </div>
+        {activeTab === 'analyze' ? (
+          <>
+            {/* 3-Column Grid */}
+            <div className="p-5 grid grid-cols-12 gap-5 flex-1 items-start max-w-[1600px] w-full mx-auto">
+              <div className="col-span-12 md:col-span-3">
+                <InputPanel
+                  instruction={instruction}
+                  setInstruction={setInstruction}
+                  targetLanguage={targetLanguage}
+                  setTargetLanguage={setTargetLanguage}
+                  useSimplification={useSimplification}
+                  setUseSimplification={setUseSimplification}
+                  onAnalyze={handleAnalyze}
+                  isLoading={isLoading}
+                  simplificationResult={simplificationResult}
+                />
+              </div>
+              <div className="col-span-12 md:col-span-6">
+                <PipelinePanel steps={steps} finalResult={finalResult} isLoading={isLoading} />
+              </div>
+              <div className="col-span-12 md:col-span-3">
+                <RiskPanel finalResult={finalResult} isLoading={isLoading} />
+              </div>
+            </div>
 
-        {/* Demo Panel */}
-        <DemoPanel onSelectDemo={handleSelectDemo} activeDemoId={activeDemoId} />
+            {/* Demo Panel */}
+            <DemoPanel onSelectDemo={handleSelectDemo} activeDemoId={activeDemoId} />
 
-        {/* Audit Log */}
-        <AuditLog entries={auditLog} />
+            {/* Audit Log */}
+            <AuditLog entries={auditLog} />
+          </>
+        ) : (
+          <div className="flex-1 overflow-auto">
+            <DemoApp />
+          </div>
+        )}
 
         {/* Footer */}
         <footer className="bg-[#f2f4f7] border-t border-slate-200/60 py-5 px-6 mt-auto">
@@ -289,12 +318,24 @@ export default function Home() {
 
       {/* ── Mobile Bottom Nav ────────────────────────────────────── */}
       <nav className="fixed bottom-0 left-0 w-full z-50 md:hidden flex justify-around items-center pt-2 pb-6 px-4 bg-white/80 backdrop-blur-md border-t border-slate-200/20 shadow-[0_-4px_24px_rgba(25,28,30,0.06)]">
-        <div className="flex flex-col items-center text-primary bg-primary-fixed rounded px-4 py-1 cursor-default">
-          <span className="material-symbols-outlined mb-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>
+        <button
+          onClick={() => setActiveTab('analyze')}
+          className={`flex flex-col items-center px-4 py-1 rounded ${activeTab === 'analyze' ? 'text-primary bg-primary-fixed' : 'text-slate-500'}`}
+        >
+          <span className="material-symbols-outlined mb-0.5" style={{ fontVariationSettings: activeTab === 'analyze' ? "'FILL' 1" : "'FILL' 0" }}>
             health_and_safety
           </span>
           <span className="text-[10px] font-medium">Analyze</span>
-        </div>
+        </button>
+        <button
+          onClick={() => setActiveTab('pillscan')}
+          className={`flex flex-col items-center px-4 py-1 rounded ${activeTab === 'pillscan' ? 'text-primary bg-primary-fixed' : 'text-slate-500'}`}
+        >
+          <span className="material-symbols-outlined mb-0.5" style={{ fontVariationSettings: activeTab === 'pillscan' ? "'FILL' 1" : "'FILL' 0" }}>
+            medication
+          </span>
+          <span className="text-[10px] font-medium">Pill Scan</span>
+        </button>
         <div className="flex flex-col items-center text-slate-500 px-4 py-1 cursor-default">
           <span className="material-symbols-outlined mb-0.5">science</span>
           <span className="text-[10px] font-medium">Demo</span>
@@ -302,10 +343,6 @@ export default function Home() {
         <div className="flex flex-col items-center text-slate-500 px-4 py-1 cursor-default">
           <span className="material-symbols-outlined mb-0.5">history</span>
           <span className="text-[10px] font-medium">Log</span>
-        </div>
-        <div className="flex flex-col items-center text-slate-500 px-4 py-1 cursor-default">
-          <span className="material-symbols-outlined mb-0.5">settings</span>
-          <span className="text-[10px] font-medium">Settings</span>
         </div>
       </nav>
     </div>
