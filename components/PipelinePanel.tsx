@@ -4,11 +4,14 @@ import type { AnalysisResult, PipelineStep, StreamEvent, SimplificationResult } 
 import { StepProgress } from '@/components/StepProgress';
 import { FieldComparisonTable } from '@/components/FieldComparisonTable';
 import { TonalRailCard } from '@/components/TonalRailCard';
+import { PillScanCard } from '@/components/PillScanCard';
+import { useLang } from '@/lib/i18nContext';
 
 type Props = {
   steps: Map<PipelineStep, StreamEvent>;
   finalResult: AnalysisResult | null;
   isLoading: boolean;
+  instructionText?: string;
 };
 
 function TextBlock({
@@ -50,7 +53,8 @@ function TextBlock({
   );
 }
 
-export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
+export function PipelinePanel({ steps, finalResult, isLoading, instructionText }: Props) {
+  const { t } = useLang();
   const simplifyResult = steps.get('simplify')?.result as SimplificationResult | undefined;
   const showProgress = isLoading || (steps.size > 0 && !finalResult);
   const showResults = finalResult !== null;
@@ -65,7 +69,7 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
           sync_alt
         </span>
         <p className="text-sm text-on-surface-variant">
-          Enter a medication instruction and click Analyze to see the translation pipeline
+          {t('enterInstruction')}
         </p>
       </div>
     );
@@ -90,24 +94,24 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
               </span>
               <div>
                 <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
-                  Pipeline Output
+                  {t('pipelineOutput')}
                 </p>
                 <h3 className="text-sm font-bold text-on-surface leading-none mt-0.5">
-                  Translation Record
+                  {t('translationRecord')}
                 </h3>
               </div>
             </div>
             <div className="p-5 space-y-5">
               <TextBlock
                 icon="description"
-                label="Original Source"
+                label={t('originalSource')}
                 content={finalResult.originalInstruction}
               />
 
               {simplifyResult?.rewritten && (
                 <TextBlock
                   icon="auto_fix_high"
-                  label="Simplified (used for translation)"
+                  label={t('simplifiedUsed')}
                   content={simplifyResult.rewritten}
                   accent
                 />
@@ -116,7 +120,7 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
               {finalResult.translation && (
                 <TextBlock
                   icon="translate"
-                  label={`Translation → ${finalResult.targetLanguage}`}
+                  label={`${t('translationTo')} ${finalResult.targetLanguage}`}
                   content={finalResult.translation}
                   mono
                   accent
@@ -126,7 +130,7 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
               {finalResult.backTranslation && (
                 <TextBlock
                   icon="sync_alt"
-                  label="Re-read in English (safety check)"
+                  label={t('rereadEnglish')}
                   content={finalResult.backTranslation}
                 />
               )}
@@ -147,7 +151,7 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
               >
                 verified
               </span>
-              <p className="text-xs font-bold text-green-800">Semantic Integrity Verified — all extracted fields match</p>
+              <p className="text-xs font-bold text-green-800">{t('semanticIntegrity')}</p>
             </div>
           )}
 
@@ -162,10 +166,10 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
               </span>
               <div>
                 <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
-                  Field-by-Field Safety Check
+                  {t('fieldSafetyCheck')}
                 </p>
                 <h3 className="text-sm font-bold text-on-surface leading-none mt-0.5">
-                  Deterministic Comparison Table
+                  {t('deterministicTable')}
                 </h3>
               </div>
               {finalResult.driftIssues.length === 0 && (
@@ -177,7 +181,7 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
                     verified
                   </span>
                   <span className="text-[10px] font-bold text-on-primary-fixed uppercase tracking-widest">
-                    Verified
+                    {t('verified')}
                   </span>
                 </div>
               )}
@@ -190,7 +194,22 @@ export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
               />
             </div>
           </div>
+
+          {/* Pill Scanner — centered here so it's obvious after analysis */}
+          <div id="pill-scan-section">
+            <PillScanCard
+              initialDrugName={finalResult.sourceFields.medication_name}
+              instructionText={instructionText}
+            />
+          </div>
         </>
+      )}
+
+      {/* Pre-analysis pill scanner (when instruction is typed but not yet analyzed) */}
+      {!showResults && instructionText && (
+        <div id="pill-scan-section">
+          <PillScanCard initialDrugName={null} instructionText={instructionText} />
+        </div>
       )}
     </div>
   );

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import type { SupportedLanguage, SimplificationResult } from '@/lib/types';
 import { LANGUAGES } from '@/data/languages';
+import { useLang } from '@/lib/i18nContext';
 
 type Props = {
   instruction: string;
@@ -29,6 +30,7 @@ export function InputPanel({
   isLoading,
   simplificationResult,
 }: Props) {
+  const { t } = useLang();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [ocrState, setOcrState] = useState<OcrState>('idle');
   const [ocrError, setOcrError] = useState<string | null>(null);
@@ -90,10 +92,10 @@ export function InputPanel({
           </span>
           <div>
             <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
-              Safety Input
+              {t('safetyInput')}
             </p>
             <h2 className="text-sm font-bold text-on-surface leading-none mt-0.5">
-              Medication Instruction
+              {t('medicationInstruction')}
             </h2>
           </div>
         </div>
@@ -103,9 +105,9 @@ export function InputPanel({
           {/* OCR zone */}
           <div>
             <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label mb-2">
-              Scan Label{' '}
+              {t('scanLabel')}{' '}
               <span className="font-normal normal-case tracking-normal text-slate-400">
-                — optional, auto-fills below
+                {t('scanLabelNote')}
               </span>
             </label>
 
@@ -124,13 +126,13 @@ export function InputPanel({
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      Reading label…
+                      {t('readingLabel')}
                     </div>
                   )}
                   {ocrState === 'done' && (
                     <div className="flex items-center gap-1.5 text-xs text-green-700 bg-white rounded px-3 py-1.5 shadow font-label font-semibold">
                       <span className="material-symbols-outlined text-green-500" style={{ fontSize: '14px', fontVariationSettings: "'FILL' 1" }}>check_circle</span>
-                      Extracted
+                      {t('extracted')}
                     </div>
                   )}
                   {ocrState === 'error' && (
@@ -165,10 +167,10 @@ export function InputPanel({
                   upload
                 </span>
                 <p className="text-xs text-on-surface-variant">
-                  Drop photo or{' '}
-                  <span className="text-primary font-semibold underline">browse</span>
+                  {t('dropPhoto')}{' '}
+                  <span className="text-primary font-semibold underline">{t('browse')}</span>
                 </p>
-                <p className="text-[10px] text-slate-400 mt-0.5 font-label">JPEG · PNG · WebP · max 5 MB</p>
+                <p className="text-[10px] text-slate-400 mt-0.5 font-label">{t('fileTypes')}</p>
               </div>
             )}
 
@@ -185,8 +187,8 @@ export function InputPanel({
           {/* Instruction textarea */}
           <div>
             <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label mb-2">
-              Instruction{' '}
-              <span className="font-normal normal-case tracking-normal text-slate-400">English</span>
+              {t('instructionLabel')}{' '}
+              <span className="font-normal normal-case tracking-normal text-slate-400">{t('instructionLang')}</span>
             </label>
             <div className="p-4 bg-surface-container-low rounded border-l-2 border-outline-variant">
               <textarea
@@ -203,7 +205,7 @@ export function InputPanel({
           {/* Language */}
           <div>
             <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label mb-2">
-              Target Language
+              {t('targetLanguage')}
             </label>
             <div className="relative">
               <select
@@ -246,9 +248,9 @@ export function InputPanel({
               <div className="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
             </div>
             <div>
-              <span className="text-sm text-on-surface font-semibold">Simplify before translation</span>
+              <span className="text-sm text-on-surface font-semibold">{t('simplifyToggle')}</span>
               <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed">
-                Expands abbreviations (TID, PRN, BID) and clarifies ambiguous terms
+                {t('simplifyDesc')}
               </p>
             </div>
           </label>
@@ -265,14 +267,14 @@ export function InputPanel({
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Analyzing…
+                {t('analyzing')}
               </>
             ) : (
               <>
                 <span className="material-symbols-outlined" style={{ fontSize: '18px', fontVariationSettings: "'FILL' 1" }}>
                   analytics
                 </span>
-                Analyze Translation Safety
+                {t('analyzeButton')}
               </>
             )}
           </button>
@@ -285,7 +287,7 @@ export function InputPanel({
           <div className="px-5 py-3 border-b border-blue-800/30 flex items-center gap-2">
             <span className="text-blue-400 text-sm">ℹ</span>
             <p className="text-[10px] font-bold text-blue-300/80 uppercase tracking-widest font-label">
-              Pre-Translation Notes
+              {t('preTranslationNotes')}
             </p>
           </div>
           <div className="p-5">

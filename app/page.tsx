@@ -15,8 +15,10 @@ import { PipelinePanel } from '@/components/PipelinePanel';
 import { RiskPanel } from '@/components/RiskPanel';
 import { DemoPanel } from '@/components/DemoPanel';
 import { AuditLog } from '@/components/AuditLog';
+import { useLang } from '@/lib/i18nContext';
 
 export default function Home() {
+  const { lang, setLang, t } = useLang();
   const [instruction, setInstruction] = useState('');
   const [targetLanguage, setTargetLanguage] = useState<SupportedLanguage>('Spanish');
   const [useSimplification, setUseSimplification] = useState(true);
@@ -120,11 +122,11 @@ export default function Home() {
               </span>
             </div>
             <h2 className="text-sm font-black text-blue-900 uppercase tracking-widest leading-none">
-              DoseGuard
+              {t('appName')}
             </h2>
           </div>
           <p className="text-[10px] font-bold text-blue-700/60 uppercase tracking-widest pl-[42px]">
-            Clinical Safety
+            {t('appSubtitle')}
           </p>
         </div>
 
@@ -136,7 +138,7 @@ export default function Home() {
             >
               health_and_safety
             </span>
-            <span className="text-sm">Analyze</span>
+            <span className="text-sm">{t('navAnalyze')}</span>
           </div>
           <div
             className={`flex items-center gap-3 px-3 py-2.5 rounded cursor-default transition-all ${
@@ -144,7 +146,7 @@ export default function Home() {
             }`}
           >
             <span className="material-symbols-outlined text-xl">science</span>
-            <span className="text-sm">Demo Cases</span>
+            <span className="text-sm">{t('navDemo')}</span>
           </div>
           <div
             className={`flex items-center gap-3 px-3 py-2.5 rounded cursor-default transition-all ${
@@ -152,7 +154,7 @@ export default function Home() {
             }`}
           >
             <span className="material-symbols-outlined text-xl">history</span>
-            <span className="text-sm">Session Log</span>
+            <span className="text-sm">{t('navSessionLog')}</span>
             {auditLog.length > 0 && (
               <span className="ml-auto text-[10px] font-bold bg-primary text-white rounded px-1.5 py-0.5">
                 {auditLog.length}
@@ -161,22 +163,22 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3 px-3 py-2.5 text-slate-400 cursor-default">
             <span className="material-symbols-outlined text-xl">medication</span>
-            <span className="text-sm">Pill Scan ↓ in panel</span>
+            <span className="text-sm">{t('navPillScan')}</span>
           </div>
         </nav>
 
         <div className="mt-auto pt-4 border-t border-slate-200/60 space-y-1">
           <div className="flex items-center gap-3 px-3 py-2 text-slate-400 cursor-default">
             <span className="material-symbols-outlined text-xl">description</span>
-            <span className="text-xs">Safety Docs</span>
+            <span className="text-xs">{t('navSafetyDocs')}</span>
           </div>
           <div className="flex items-center gap-3 px-3 py-2 text-slate-400 cursor-default">
             <span className="material-symbols-outlined text-xl">contact_support</span>
-            <span className="text-xs">Support</span>
+            <span className="text-xs">{t('navSupport')}</span>
           </div>
           <div className="mx-1 mt-3 p-3 bg-white rounded border border-slate-200/60">
             <p className="text-[10px] text-slate-500 leading-relaxed">
-              Not for emergencies. High-risk results require clinician or certified interpreter review before patient use.
+              {t('sidebarDisclaimer')}
             </p>
           </div>
         </div>
@@ -199,20 +201,28 @@ export default function Home() {
                 </span>
               </div>
               <span className="text-sm font-black text-blue-900 uppercase tracking-widest">
-                DoseGuard
+                {t('appName')}
               </span>
             </div>
             <span className="px-2 py-0.5 bg-primary-fixed text-on-primary-fixed text-[10px] font-bold uppercase tracking-widest rounded hidden md:inline">
-              {isLoading ? 'Processing' : 'Operational'}
+              {isLoading ? t('statusProcessing') : t('statusOperational')}
             </span>
             <span className="text-sm font-bold text-on-surface hidden md:block">
-              Translation Safety Analysis
+              {t('headerTitle')}
             </span>
           </div>
           <div className="flex items-center gap-3">
             <p className="text-xs text-on-surface-variant hidden lg:block max-w-sm text-right leading-relaxed">
-              High-risk results require clinician review before patient use
+              {t('clinicianReview')}
             </p>
+            {/* Language toggle */}
+            <button
+              onClick={() => setLang(lang === 'en' ? 'yo' : 'en')}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-slate-200 bg-white text-xs font-bold text-on-surface hover:border-primary hover:text-primary transition-colors"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>translate</span>
+              {t('switchLang')}
+            </button>
             <div className="flex items-center">
               <button className="p-1.5 text-slate-500 hover:bg-slate-200/50 rounded transition-colors">
                 <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
@@ -257,10 +267,15 @@ export default function Home() {
             />
           </div>
           <div className="col-span-12 md:col-span-6">
-            <PipelinePanel steps={steps} finalResult={finalResult} isLoading={isLoading} />
+            <PipelinePanel
+              steps={steps}
+              finalResult={finalResult}
+              isLoading={isLoading}
+              instructionText={instruction}
+            />
           </div>
           <div className="col-span-12 md:col-span-3">
-            <RiskPanel finalResult={finalResult} isLoading={isLoading} instructionText={instruction} />
+            <RiskPanel finalResult={finalResult} isLoading={isLoading} />
           </div>
         </div>
 
@@ -273,14 +288,12 @@ export default function Home() {
         {/* Footer */}
         <footer className="bg-[#f2f4f7] border-t border-slate-200/60 py-5 px-6 mt-auto">
           <div className="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-center gap-3">
-            <span className="text-xs font-bold text-primary">DoseGuard Clinical Safety</span>
+            <span className="text-xs font-bold text-primary">{t('footerBrand')}</span>
             <div className="flex gap-5 text-xs text-on-surface-variant">
-              <span className="cursor-default">Privacy Policy</span>
-              <span className="cursor-default">Clinical Protocol</span>
+              <span className="cursor-default">{t('privacyPolicy')}</span>
+              <span className="cursor-default">{t('clinicalProtocol')}</span>
             </div>
-            <p className="text-xs text-on-surface-variant">
-              © 2024 DoseGuard | Translation Safety Verification
-            </p>
+            <p className="text-xs text-on-surface-variant">{t('footerCopyright')}</p>
           </div>
         </footer>
       </main>
@@ -289,19 +302,19 @@ export default function Home() {
       <nav className="fixed bottom-0 left-0 w-full z-50 md:hidden flex justify-around items-center pt-2 pb-6 px-4 bg-white/80 backdrop-blur-md border-t border-slate-200/20 shadow-[0_-4px_24px_rgba(25,28,30,0.06)]">
         <div className="flex flex-col items-center text-primary bg-primary-fixed rounded px-4 py-1 cursor-default">
           <span className="material-symbols-outlined mb-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>health_and_safety</span>
-          <span className="text-[10px] font-medium">Analyze</span>
+          <span className="text-[10px] font-medium">{t('mobileAnalyze')}</span>
         </div>
         <div className="flex flex-col items-center text-slate-500 px-4 py-1 cursor-default">
           <span className="material-symbols-outlined mb-0.5">science</span>
-          <span className="text-[10px] font-medium">Demo</span>
+          <span className="text-[10px] font-medium">{t('mobileDemo')}</span>
         </div>
         <div className="flex flex-col items-center text-slate-500 px-4 py-1 cursor-default">
           <span className="material-symbols-outlined mb-0.5">medication</span>
-          <span className="text-[10px] font-medium">Pill Scan</span>
+          <span className="text-[10px] font-medium">{t('mobilePillScan')}</span>
         </div>
         <div className="flex flex-col items-center text-slate-500 px-4 py-1 cursor-default">
           <span className="material-symbols-outlined mb-0.5">history</span>
-          <span className="text-[10px] font-medium">Log</span>
+          <span className="text-[10px] font-medium">{t('mobileLog')}</span>
         </div>
       </nav>
     </div>

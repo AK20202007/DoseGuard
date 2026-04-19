@@ -10,6 +10,7 @@ import {
 } from '@/lib/pillcv';
 import type { ResolvedPrescription } from '@/lib/dailymed/types';
 import type { AnalyzePillCandidateOutput, VlmBackupResult } from '@/lib/pillcv/types';
+import { useLang } from '@/lib/i18nContext';
 
 type Mode = 'idle' | 'camera' | 'analyzing' | 'done' | 'error';
 
@@ -36,6 +37,7 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
 }
 
 function ResultCard({ scanResult, prescription }: { scanResult: ScanResult; prescription: ResolvedPrescription }) {
+  const { t } = useLang();
   const { analysis, vlm } = scanResult;
   const cv = analysis.score.result;
   const overallPct = Math.round(cv.overallScore * 100);
@@ -48,21 +50,19 @@ function ResultCard({ scanResult, prescription }: { scanResult: ScanResult; pres
     cv.overallScore >= 0.55 ? 'uncertain' : 'mismatch';
 
   const styles = {
-    match:    { bg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-900',  icon: 'verified',    label: 'Pill Verified' },
-    uncertain:{ bg: 'bg-amber-50',  border: 'border-amber-200', text: 'text-amber-900',  icon: 'warning',     label: 'Uncertain — Review' },
-    mismatch: { bg: 'bg-red-50',    border: 'border-red-200',   text: 'text-red-900',    icon: 'gpp_bad',     label: 'Pill Mismatch' },
+    match:    { bg: 'bg-green-50',  border: 'border-green-200', text: 'text-green-900',  icon: 'verified',    label: t('pillVerified') },
+    uncertain:{ bg: 'bg-amber-50',  border: 'border-amber-200', text: 'text-amber-900',  icon: 'warning',     label: t('pillUncertain') },
+    mismatch: { bg: 'bg-red-50',    border: 'border-red-200',   text: 'text-red-900',    icon: 'gpp_bad',     label: t('pillMismatch') },
   }[verdict];
 
   return (
     <div className="space-y-3">
-      {/* Captured image */}
       <img
         src={scanResult.capturedUrl}
         alt="Captured pill"
         className="w-full rounded border border-slate-200 object-cover max-h-48"
       />
 
-      {/* Verdict banner */}
       <div className={`rounded border p-3 ${styles.bg} ${styles.border}`}>
         <div className="flex items-center gap-2 mb-1">
           <span
@@ -82,46 +82,32 @@ function ResultCard({ scanResult, prescription }: { scanResult: ScanResult; pres
         )}
       </div>
 
-      {/* Score breakdown */}
       <div className="space-y-2">
-        <ScoreBar label="Color match" value={cv.matchBreakdown.color} />
-        <ScoreBar label="Shape match" value={cv.matchBreakdown.shape} />
+        <ScoreBar label={t('colorMatch')} value={cv.matchBreakdown.color} />
+        <ScoreBar label={t('shapeMatch')} value={cv.matchBreakdown.shape} />
         {prescription.imprint && (
-          <ScoreBar label="Imprint match" value={cv.matchBreakdown.imprint} />
+          <ScoreBar label={t('imprintMatch')} value={cv.matchBreakdown.imprint} />
         )}
       </div>
 
-      {/* DailyMed expected attributes */}
       <div className="text-[10px] text-on-surface-variant font-label bg-surface-container-low rounded p-2 space-y-0.5">
-        <div><span className="font-bold">Expected color:</span> {prescription.color.join(', ')}</div>
-        <div><span className="font-bold">Expected shape:</span> {prescription.shape}</div>
-        {prescription.imprint && <div><span className="font-bold">Expected imprint:</span> {prescription.imprint}</div>}
+        <div><span className="font-bold">{t('expectedColor')}</span> {prescription.color.join(', ')}</div>
+        <div><span className="font-bold">{t('expectedShape')}</span> {prescription.shape}</div>
+        {prescription.imprint && <div><span className="font-bold">{t('expectedImprint')}</span> {prescription.imprint}</div>}
       </div>
 
       {vlm && (
         <div className="text-[10px] text-on-surface-variant font-label">
-          AI verification via {vlm.model ?? 'Claude'} · verdict: {vlm.verdict} · {Math.round(vlm.confidence * 100)}% confidence
+          {t('aiVerification')} {vlm.model ?? 'Claude'} · {t('verdict')} {vlm.verdict} · {Math.round(vlm.confidence * 100)}% {t('confidence')}
         </div>
       )}
     </div>
   );
 }
 
-function extractDrugName(text: string): string | null {
-  const cleaned = text.replace(/^(take|use|apply|give|administer)\s+/i, '').trim();
-  const skip = new Set(['a','an','the','one','two','three','four','five','six','seven','eight','nine','ten',
-    'tablet','tablets','capsule','capsules','drop','drops','dose','doses','pill','pills',
-    'mg','ml','mcg','g','iu','this','these','your','each','daily','times']);
-  for (const word of cleaned.split(/\s+/)) {
-    const clean = word.toLowerCase().replace(/[^a-z]/g, '');
-    if (clean.length > 3 && !skip.has(clean) && !/^\d/.test(word)) return clean;
-  }
-  return null;
-}
-
 export function PillScanCard({ initialDrugName, instructionText }: { initialDrugName: string | null; instructionText?: string }) {
-  const derived = initialDrugName ?? (instructionText ? extractDrugName(instructionText) : null);
-  const [drugInput, setDrugInput] = useState(derived ?? '');
+  const { t } = useLang();
+  const [drugInput, setDrugInput] = useState(initialDrugName ?? '');
   const [prescription, setPrescription] = useState<ResolvedPrescription | null>(null);
   const [loadingRx, setLoadingRx] = useState(false);
   const [rxError, setRxError] = useState<string | null>(null);
@@ -134,10 +120,24 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync drug name when parent updates (analysis completes or instruction changes)
+  // When analysis gives us a real extracted name, use it immediately
   useEffect(() => {
-    const next = initialDrugName ?? (instructionText ? extractDrugName(instructionText) : null);
-    if (next && !prescription) setDrugInput(next);
+    if (initialDrugName && !prescription) setDrugInput(initialDrugName);
+  }, [initialDrugName, prescription]);
+
+  // When only instructionText is available (pre-analysis), ask Claude Haiku for the drug name
+  useEffect(() => {
+    if (initialDrugName || !instructionText || prescription) return;
+    let cancelled = false;
+    fetch('/api/extract-drug-name', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: instructionText }),
+    })
+      .then(r => r.json())
+      .then(({ name }) => { if (!cancelled && name) setDrugInput(name); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [initialDrugName, instructionText, prescription]);
 
   const stopCamera = useCallback(() => {
@@ -175,7 +175,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
       }
     } catch {
       setMode('error');
-      setStatusMsg('Camera access denied or unavailable.');
+      setStatusMsg(t('cameraError'));
     }
   }, []);
 
@@ -198,7 +198,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
     if (!file || !prescription || !canvasRef.current) return;
     setScanResult(null);
     setMode('analyzing');
-    setStatusMsg('Loading image…');
+    setStatusMsg(t('loadingImage'));
 
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -215,7 +215,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
     };
     img.onerror = () => {
       setMode('error');
-      setStatusMsg('Could not load image file.');
+      setStatusMsg(t('couldNotLoad'));
     };
     img.src = url;
   }, [prescription]);
@@ -223,17 +223,17 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
   const runAnalysis = useCallback(async (imageData: ImageData, capturedUrl: string) => {
     if (!prescription) return;
     setMode('analyzing');
-    setStatusMsg('Detecting pill outline…');
+    setStatusMsg(t('detectingPill'));
 
     const candidates = detectPillCandidates(imageData, undefined, DEFAULT_OUTLINE_DETECTION_OPTIONS, 3);
     const outline = candidates[0];
     if (!outline) {
       setMode('error');
-      setStatusMsg('No pill detected in image. Try centering the pill on a plain background.');
+      setStatusMsg(t('noPillDetected'));
       return;
     }
 
-    setStatusMsg('Analyzing color, shape, and imprint…');
+    setStatusMsg(t('analyzingPill'));
     let analysis: AnalyzePillCandidateOutput;
     try {
       analysis = await analyzePillCandidate({
@@ -263,7 +263,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
       prescription.imprint !== null,
     );
     if (needsVlm) {
-      setStatusMsg('Running AI verification…');
+      setStatusMsg(t('runningAI'));
       vlm = await requestVlmBackup({
         imageDataUrl: capturedUrl,
         prescription,
@@ -300,10 +300,10 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
         </span>
         <div>
           <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label">
-            Physical Pill Verification
+            {t('physicalPillVerification')}
           </p>
           <h3 className="text-sm font-bold text-on-surface leading-none mt-0.5">
-            Pill Scanner
+            {t('pillScanner')}
           </h3>
         </div>
       </div>
@@ -312,7 +312,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
         {/* Drug name + DailyMed lookup */}
         <div>
           <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest font-label mb-1.5">
-            Drug Name
+            {t('drugName')}
           </label>
           <div className="flex gap-2">
             <input
@@ -320,7 +320,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
               value={drugInput}
               onChange={e => { setDrugInput(e.target.value); setPrescription(null); setScanResult(null); }}
               onKeyDown={e => e.key === 'Enter' && loadPrescription()}
-              placeholder="e.g. warfarin, amoxicillin"
+              placeholder={t('drugNamePlaceholder')}
               className="flex-1 text-sm border border-outline-variant rounded px-3 py-2 bg-surface-container-low text-on-surface placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
             <button
@@ -328,7 +328,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
               disabled={!drugInput.trim() || loadingRx}
               className="px-3 py-2 bg-primary text-white text-xs font-bold rounded disabled:opacity-40 transition-opacity"
             >
-              {loadingRx ? '…' : 'Lookup'}
+              {loadingRx ? '…' : t('lookup')}
             </button>
           </div>
           {rxError && <p className="text-xs text-red-600 mt-1">{rxError}</p>}
@@ -348,14 +348,14 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
               className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-primary text-primary text-sm font-semibold rounded hover:bg-primary/5 transition-colors"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>photo_camera</span>
-              Use Camera
+              {t('useCamera')}
             </button>
             <button
               onClick={() => fileInputRef.current?.click()}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-outline-variant text-on-surface text-sm font-semibold rounded hover:bg-surface-container-low transition-colors"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>upload</span>
-              Upload Photo
+              {t('uploadPhoto')}
             </button>
             <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
           </div>
@@ -372,7 +372,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
               </div>
             </div>
             <p className="text-[10px] text-on-surface-variant text-center font-label">
-              Center the pill inside the oval, then capture
+              {t('centerPill')}
             </p>
             <div className="flex gap-2">
               <button
@@ -382,10 +382,10 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
                 <span className="material-symbols-outlined align-middle mr-1" style={{ fontSize: '16px', fontVariationSettings: "'FILL' 1" }}>
                   camera
                 </span>
-                Capture &amp; Analyze
+                {t('captureAnalyze')}
               </button>
               <button onClick={reset} className="px-4 py-2.5 border border-outline-variant rounded text-sm text-on-surface">
-                Cancel
+                {t('cancel')}
               </button>
             </div>
           </div>
@@ -412,7 +412,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
               {statusMsg}
             </div>
             <button onClick={reset} className="w-full py-2 border border-outline-variant rounded text-sm text-on-surface">
-              Try Again
+              {t('tryAgain')}
             </button>
           </div>
         )}
@@ -422,7 +422,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
           <div className="space-y-3">
             <ResultCard scanResult={scanResult} prescription={prescription} />
             <button onClick={reset} className="w-full py-2 border border-outline-variant rounded text-sm text-on-surface">
-              Scan Again
+              {t('scanAgain')}
             </button>
           </div>
         )}
@@ -432,7 +432,7 @@ export function PillScanCard({ initialDrugName, instructionText }: { initialDrug
 
         {!prescription && mode === 'idle' && (
           <p className="text-xs text-on-surface-variant text-center py-2">
-            Enter the medication name and click Lookup to load its DailyMed profile, then capture or upload a photo to verify the physical pill.
+            {t('pillScanIdle')}
           </p>
         )}
       </div>
