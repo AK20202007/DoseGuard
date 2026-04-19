@@ -391,6 +391,92 @@ async def analyze(file: UploadFile = File(...)):
         ),
     )
 
+    # ── Gradient confidence score (0–100) ────────────────────────────────────
+    def _compute_confidence(
+        consensus: float,        # 0–1 min agreement across critical fields
+        n_available: int,        # engines with data
+        fda_score: float,        # 0–1 FDA name match confidence
+        engines_matching_fda: int,
+        safety: dict | None,
+        llm_fields: dict | None,
+        llm_model: str,
+    ) -> dict:
+        score = 0.0
+        breakdown: dict[str, float] = {}
+
+        # ── Component 1: OCR consensus (0–35 pts) ─────────────────────────
+        ocr_pts = round(consensus * 35, 1)
+        breakdown["ocr_consensus"] = ocr_pts
+        score += ocr_pts
+
+        # ── Component 2: FDA drug-name match (0–30 pts) ───────────────────
+        fda_pts = round(fda_score * 30, 1)
+        breakdown["fda_name_match"] = fda_pts
+        score += fda_pts
+
+        # ── Component 3: Layer 2 safety vault (−15 to +25 pts) ───────────
+        if safety:
+            if safety.get("clinical_impossibility"):
+                safety_pts = -15.0   # hard penalty
+            elif safety.get("dose_verified") and safety.get("medication_verified"):
+                safety_pts = 25.0
+            elif safety.get("medication_verified"):
+                safety_pts = 12.0
+            else:
+                safety_pts = 0.0
+        else:
+            safety_pts = 0.0
+        breakdown["safety_vault"] = safety_pts
+        score += safety_pts
+
+        # ── Component 4: LLM verification (0–10 pts) ──────────────────────
+        if llm_fields and llm_model:
+            llm_drug = (llm_fields.get("medication_name") or "").lower()
+            merged_drug = (merged_fields.get("medication_name") or "").lower()
+            if llm_drug and merged_drug and (llm_drug == merged_drug or llm_drug in merged_drug or merged_drug in llm_drug):
+                llm_pts = 10.0
+            elif llm_drug:
+                llm_pts = 4.0   # LLM ran but disagreed
+            else:
+                llm_pts = 2.0   # LLM ran but no name
+        else:
+            llm_pts = 0.0
+        breakdown["llm_verification"] = llm_pts
+        score += llm_pts
+
+        # Clamp to 0–100
+        score = round(max(0.0, min(100.0, score)), 1)
+
+        # Grade label
+        if score >= 85:
+            label, tier = "High", "high"
+        elif score >= 70:
+            label, tier = "Good", "good"
+        elif score >= 50:
+            label, tier = "Moderate", "moderate"
+        elif score >= 30:
+            label, tier = "Low", "low"
+        else:
+            label, tier = "Very Low", "very_low"
+
+        return {
+            "score": score,
+            "label": label,
+            "tier": tier,
+            "breakdown": breakdown,
+        }
+
+    s2 = safety_result or {}
+    confidence_score = _compute_confidence(
+        consensus=overall_consensus,
+        n_available=len(available),
+        fda_score=fda_score,
+        engines_matching_fda=engines_matching_fda,
+        safety=s2 if s2 else None,
+        llm_fields=llm_fields,
+        llm_model=llm_model,
+    )
+
     # ── Final response ────────────────────────────────────────────────────────
     return JSONResponse({
         "image_preview": f"data:image/jpeg;base64,{img_b64}",
@@ -408,6 +494,7 @@ async def analyze(file: UploadFile = File(...)):
             "merged_text": merged_text,
             "raw_texts": raw_texts,
         },
+        "confidence_score": confidence_score,
         "reliability": reliability,
         "layer2_safety": safety_result,
         "fda_name_lookup": fda_result,

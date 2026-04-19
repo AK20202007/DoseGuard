@@ -251,21 +251,25 @@
         <div id="merged-fields"></div>
       </div>
 
-      <div class="card">
-        <div class="section-title">Overall Consensus</div>
-        <div id="consensus-ring" style="text-align:center;padding:16px 0">
-          <svg width="120" height="120" viewBox="0 0 120 120">
-            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="10"/>
-            <circle id="consensus-arc" cx="60" cy="60" r="50" fill="none"
-              stroke="var(--accent)" stroke-width="10"
-              stroke-dasharray="314" stroke-dashoffset="314"
-              stroke-linecap="round" transform="rotate(-90 60 60)"
-              style="transition:stroke-dashoffset .8s ease"/>
-            <text id="consensus-pct" x="60" y="65" text-anchor="middle"
-              font-size="22" font-weight="700" fill="var(--text)">—</text>
+      <div class="card" id="confidence-card">
+        <div class="section-title">Confidence Score</div>
+        <!-- Gauge -->
+        <div style="text-align:center;padding:12px 0 6px">
+          <svg width="140" height="80" viewBox="0 0 140 80">
+            <!-- Background arc (180°) -->
+            <path d="M 10 70 A 60 60 0 0 1 130 70" fill="none" stroke="var(--border)" stroke-width="14" stroke-linecap="round"/>
+            <!-- Gradient fill arc -->
+            <path id="conf-arc" d="M 10 70 A 60 60 0 0 1 130 70" fill="none" stroke="var(--accent)"
+              stroke-width="14" stroke-linecap="round"
+              stroke-dasharray="188.5" stroke-dashoffset="188.5"
+              style="transition:stroke-dashoffset 1s ease, stroke .6s ease"/>
+            <!-- Score text -->
+            <text id="conf-score-text" x="70" y="62" text-anchor="middle" font-size="26" font-weight="800" fill="var(--text)">—</text>
+            <text id="conf-label-text" x="70" y="78" text-anchor="middle" font-size="11" fill="var(--muted)">calculating</text>
           </svg>
         </div>
-        <div id="field-score-list" style="margin-top:4px"></div>
+        <!-- Breakdown bars -->
+        <div id="conf-breakdown" style="margin-top:6px"></div>
       </div>
     </div>
 
@@ -396,24 +400,56 @@ function render(d) {
     </div>`;
   }).join('');
 
-  // ── Consensus ring ───────────────────────────────────────────────────────
-  const score = merged.overall_consensus_score;
-  const arc = document.getElementById('consensus-arc');
-  const pctText = document.getElementById('consensus-pct');
-  const circumference = 314;
-  arc.setAttribute('stroke-dashoffset', circumference - circumference * score);
-  arc.setAttribute('stroke', scoreColor(score));
-  pctText.textContent = `${(score * 100).toFixed(0)}%`;
+  // ── Confidence gauge ─────────────────────────────────────────────────────
+  const cs = d.confidence_score || {};
+  const confScore = cs.score ?? 0;
+  const confLabel = cs.label ?? '—';
+  const confTier  = cs.tier  ?? 'very_low';
+  const confBreak = cs.breakdown || {};
 
-  const fieldList = document.getElementById('field-score-list');
-  fieldList.innerHTML = Object.entries(cc).map(([f, v]) => {
-    const s = v.agreement_score;
-    const w = (s * 100).toFixed(0);
+  // Colour gradient: red(0)→orange→yellow→lime→green(100)
+  function confColor(s) {
+    if (s >= 85) return '#22c55e';
+    if (s >= 70) return '#84cc16';
+    if (s >= 50) return '#f59e0b';
+    if (s >= 30) return '#f97316';
+    return '#ef4444';
+  }
+  const cColor = confColor(confScore);
+
+  // Semi-circle arc: dasharray=188.5 is half-circle circumference (r=60, π×60)
+  const arcEl  = document.getElementById('conf-arc');
+  const scoreEl = document.getElementById('conf-score-text');
+  const labelEl = document.getElementById('conf-label-text');
+  const totalArc = 188.5;
+  const offset = totalArc - (confScore / 100) * totalArc;
+  setTimeout(() => {   // allow DOM to settle before animation
+    arcEl.setAttribute('stroke-dashoffset', offset);
+    arcEl.setAttribute('stroke', cColor);
+  }, 80);
+  scoreEl.textContent = confScore.toFixed(0);
+  scoreEl.setAttribute('fill', cColor);
+  labelEl.textContent = confLabel;
+
+  // Breakdown bars
+  const breakdownLabels = {
+    ocr_consensus:   'OCR Consensus',
+    fda_name_match:  'FDA Match',
+    safety_vault:    'Safety Vault',
+    llm_verification:'LLM Check',
+  };
+  const maxPts = { ocr_consensus:35, fda_name_match:30, safety_vault:25, llm_verification:10 };
+  document.getElementById('conf-breakdown').innerHTML = Object.entries(confBreak).map(([k, pts]) => {
+    const label  = breakdownLabels[k] || k;
+    const max    = maxPts[k] || 35;
+    const pct    = Math.max(0, (pts / max) * 100);
+    const color  = pts < 0 ? '#ef4444' : confColor((pts / max) * 100);
     return `<div style="margin-bottom:6px">
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:3px">
-        <span>${f.replace('_',' ')}</span><span style="color:${scoreColor(s)}">${w}%</span>
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px">
+        <span style="color:var(--muted)">${label}</span>
+        <span style="color:${color};font-weight:600">${pts > 0 ? '+' : ''}${pts}/${max}</span>
       </div>
-      <div class="rel-bar"><div class="rel-fill" style="width:${w}%;background:${scoreColor(s)}"></div></div>
+      <div class="rel-bar"><div class="rel-fill" style="width:${Math.max(0,pct).toFixed(0)}%;background:${color}"></div></div>
     </div>`;
   }).join('');
 
