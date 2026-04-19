@@ -3,6 +3,7 @@
 import type { AnalysisResult } from '@/lib/types';
 import { RiskBadge } from '@/components/RiskBadge';
 import { TeachBackCard } from '@/components/TeachBackCard';
+import { PillScanCard } from '@/components/PillScanCard';
 
 type Props = {
   finalResult: AnalysisResult | null;
@@ -275,6 +276,9 @@ export function RiskPanel({ finalResult, isLoading }: Props) {
       {finalResult.teachBackQuestion !== null && (
         <TeachBackCard question={finalResult.teachBackQuestion} />
       )}
+
+      {/* Pill Scanner safeguard */}
+      <PillScanCard initialDrugName={finalResult.sourceFields.medication_name} />
     </div>
   );
 }
