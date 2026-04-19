@@ -8,6 +8,7 @@ import { analyzeDrift } from '@/lib/pipeline/driftAnalyzer';
 import { scoreRisk } from '@/lib/pipeline/riskScorer';
 import { generateTeachBack } from '@/lib/pipeline/teachBackGenerator';
 import { appendAuditLog } from '@/lib/auditLog';
+import { runTonalRail, warmMT5 } from '@/lib/pipeline/tonalRail';
 import type { AnalysisResult, StreamEvent, SupportedLanguage } from '@/lib/types';
 
 export const runtime = 'nodejs';
@@ -30,6 +31,9 @@ export async function POST(request: NextRequest) {
       }
 
       try {
+        // Warm up mT5 model concurrently with simplification to reduce cold-start latency
+        if (targetLanguage === 'Yoruba') warmMT5();
+
         // ── Step 1: Source simplification ────────────────────────────────
         emit({ step: 'simplify', status: 'running' });
         const simplificationResult = await simplifySource(instruction);
@@ -45,7 +49,15 @@ export async function POST(request: NextRequest) {
         const translation = await translateInstruction(effectiveSource, targetLanguage, langMeta);
         emit({ step: 'translate', status: 'complete', result: translation });
 
-        // ── Step 3: Back-translation ──────────────────────────────────────
+        // ── Step 3: Tonal Rail (Yoruba only) ─────────────────────────────
+        let tonalRailResult = undefined;
+        if (targetLanguage === 'Yoruba') {
+          emit({ step: 'tonalRail', status: 'running' });
+          tonalRailResult = await runTonalRail(effectiveSource, translation);
+          emit({ step: 'tonalRail', status: 'complete', result: tonalRailResult });
+        }
+
+        // ── Step 4: Back-translation ──────────────────────────────────────
         emit({ step: 'backTranslate', status: 'running' });
         const backTranslation = await backTranslateInstruction(translation, targetLanguage);
         emit({ step: 'backTranslate', status: 'complete', result: backTranslation });
@@ -100,6 +112,7 @@ export async function POST(request: NextRequest) {
           teachBackQuestion,
           targetLanguage,
           languageQualityWarning: langMeta.warningMessage,
+          tonalRailResult,
           timestamp: new Date().toISOString(),
         };
 

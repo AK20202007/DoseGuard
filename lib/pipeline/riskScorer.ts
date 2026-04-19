@@ -2,18 +2,18 @@ import type { DriftIssue, LanguageMetadata, RiskLevel, Recommendation } from '@/
 
 const FIELD_WEIGHTS: Record<string, number> = {
   dosage_amount: 40,
-  dosage_unit: 40,
+  dosage_unit: 35,
   max_daily_dose: 40,
   frequency: 40,
-  interval: 40,
   warnings: 30,
-  route: 25,
+  route: 20,
   duration: 15,
-  food_instruction: 10,
-  conditionality: 10,
-  medication_name: 8,
-  patient_group: 8,
-  notes: 5,
+  interval: 10,       // low — usually duplicates frequency
+  food_instruction: 8,
+  conditionality: 8,
+  medication_name: 6,
+  patient_group: 5,
+  notes: 0,           // excluded — too noisy
 };
 
 const SEVERITY_MULTIPLIERS: Record<DriftIssue['severity'], number> = {

@@ -69,57 +69,54 @@ export function FieldComparisonTable({ sourceFields, backTranslatedFields, drift
     );
   }
 
+  const noDrift = driftIssues.length === 0;
+
   return (
-    <div className="overflow-x-auto -mx-4">
-      <table className="w-full text-xs border-collapse min-w-[500px]">
+    <div className="overflow-x-auto">
+      {noDrift && hasAnyData && (
+        <div className="flex items-center gap-1.5 mb-3 text-xs text-emerald-500">
+          <svg className="w-3.5 h-3.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+          All extracted fields match — no semantic drift detected
+        </div>
+      )}
+      <table className="w-full text-xs border-collapse min-w-[600px]">
         <thead>
-          <tr className="bg-slate-50 border-b border-slate-200">
-            <th className="text-left py-2 px-4 font-semibold text-slate-500 uppercase tracking-wide w-1/4">
-              Field
-            </th>
-            <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-wide w-[37.5%]">
-              Source
-            </th>
-            <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-wide w-[37.5%]">
-              Back-Translation
-            </th>
+          <tr className="border-b border-slate-700">
+            <th className="text-left py-2 pr-4 font-semibold text-slate-500 uppercase tracking-widest whitespace-nowrap min-w-[130px]">Field</th>
+            <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-widest min-w-[220px]">Source</th>
+            <th className="text-left py-2 px-3 font-semibold text-slate-500 uppercase tracking-widest min-w-[220px]">Back-Translation</th>
           </tr>
         </thead>
         <tbody>
           {FIELD_LABELS.map(({ key, label }) => {
             const srcRaw = sourceFields[key] as string | string[] | null;
             const backRaw = backTranslatedFields[key] as string | string[] | null;
-            if (isFieldEmpty(srcRaw) && isFieldEmpty(backRaw)) return null;
+            const bothEmpty = isFieldEmpty(srcRaw) && isFieldEmpty(backRaw);
 
             const issues = driftByField.get(key) ?? [];
             const topIssue = issues[0];
-            const style = topIssue ? SEVERITY_STYLES[topIssue.severity] : null;
             const srcVal = formatValue(srcRaw);
             const backVal = formatValue(backRaw);
+            const rowAccent = topIssue?.severity === 'high' ? 'border-l-2 border-red-500 pl-2' :
+              topIssue?.severity === 'medium' ? 'border-l-2 border-amber-500 pl-2' :
+              topIssue ? 'border-l-2 border-yellow-500 pl-2' : '';
 
             return (
-              <tr
-                key={key}
-                className={`border-b border-slate-100 ${style?.row ?? 'hover:bg-slate-50'} ${style?.border ?? ''}`}
-              >
-                <td className="py-2 px-4 font-medium text-slate-700">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {label}
-                    {topIssue && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${style?.badge}`}>
-                        {topIssue.severity}
-                      </span>
-                    )}
-                  </div>
-                </td>
-                <td className="py-2 px-3 text-slate-800">{srcVal}</td>
-                <td className="py-2 px-3">
-                  <span className={topIssue ? 'font-semibold' : 'text-slate-800'}>{backVal}</span>
+              <tr key={key} className={`border-b border-slate-800/60 transition-colors ${bothEmpty ? 'opacity-35' : 'hover:bg-slate-800/30'}`}>
+                <td className={`py-2.5 pr-4 font-medium text-slate-300 whitespace-nowrap ${rowAccent}`}>
+                  <div>{label}</div>
                   {topIssue && (
-                    <div className="text-slate-500 mt-0.5 font-normal leading-tight">
-                      {topIssue.explanation}
-                    </div>
+                    <span className={`text-xs font-normal ${
+                      topIssue.severity === 'high' ? 'text-red-400' :
+                      topIssue.severity === 'medium' ? 'text-amber-400' : 'text-yellow-400'
+                    }`}>{topIssue.severity}</span>
                   )}
+                </td>
+                <td className="py-2.5 px-3 text-slate-400">{srcVal}</td>
+                <td className="py-2.5 px-3">
+                  <span className={topIssue ? 'text-red-300 font-semibold' : 'text-slate-400'}>{backVal}</span>
                 </td>
               </tr>
             );

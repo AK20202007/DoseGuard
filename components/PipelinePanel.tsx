@@ -3,6 +3,7 @@
 import type { AnalysisResult, PipelineStep, StreamEvent, SimplificationResult } from '@/lib/types';
 import { StepProgress } from '@/components/StepProgress';
 import { FieldComparisonTable } from '@/components/FieldComparisonTable';
+import { TonalRailCard } from '@/components/TonalRailCard';
 
 type Props = {
   steps: Map<PipelineStep, StreamEvent>;
@@ -10,111 +11,94 @@ type Props = {
   isLoading: boolean;
 };
 
-function TextBlock({
-  label,
-  content,
-  variant = 'default',
-  mono = false,
-}: {
-  label: string;
-  content: string;
-  variant?: 'default' | 'subdued' | 'accent';
-  mono?: boolean;
-}) {
-  const containerClass =
-    variant === 'subdued'
-      ? 'bg-slate-50 border-slate-200 text-slate-600'
-      : variant === 'accent'
-        ? 'bg-blue-50 border-blue-200 text-blue-900'
-        : 'bg-white border-slate-200 text-slate-800';
-  const labelClass =
-    variant === 'accent' ? 'text-blue-700' : 'text-slate-500';
-
+function Section({ label, children, accent }: { label: string; children: React.ReactNode; accent?: string }) {
   return (
-    <div>
-      <div className={`text-xs font-semibold uppercase tracking-wide mb-1.5 ${labelClass}`}>
-        {label}
-      </div>
-      <div className={`text-sm rounded border p-3 ${containerClass} ${mono ? 'font-mono' : ''}`}>
-        {content || <span className="text-slate-400 italic">—</span>}
+    <div className="mb-6">
+      <p className={`text-xs font-semibold uppercase tracking-widest mb-2 ${accent ?? 'text-slate-500'}`}>{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function TextBox({ content, mono, dim }: { content: string; mono?: boolean; dim?: boolean }) {
+  return (
+    <div className={`rounded-lg px-4 py-3 text-sm leading-relaxed border ${
+      dim
+        ? 'bg-slate-800/50 border-slate-700/50 text-slate-400'
+        : 'bg-slate-800 border-slate-700 text-slate-100'
+    } ${mono ? 'font-mono text-xs' : ''}`}>
+      {content || <span className="text-slate-600 italic">—</span>}
+    </div>
+  );
+}
+
+function VerifiedBanner() {
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg bg-emerald-950/40 border border-emerald-800/50 px-4 py-3 mb-6">
+      <svg className="w-4 h-4 text-emerald-400 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+      </svg>
+      <div>
+        <p className="text-xs font-semibold text-emerald-400">Semantic Integrity Verified</p>
+        <p className="text-xs text-emerald-600 mt-0.5">No drift detected between source and back-translation</p>
       </div>
     </div>
   );
 }
 
 export function PipelinePanel({ steps, finalResult, isLoading }: Props) {
-  const simplifyEvent = steps.get('simplify');
-  const simplifyResult = simplifyEvent?.result as SimplificationResult | undefined;
-  const translateDone = steps.get('translate')?.status === 'complete';
-  const backTranslateDone = steps.get('backTranslate')?.status === 'complete';
-
+  const simplifyResult = steps.get('simplify')?.result as SimplificationResult | undefined;
   const showProgress = isLoading || (steps.size > 0 && !finalResult);
-  const showResults = finalResult !== null;
 
-  if (!showProgress && !showResults) {
+  if (!showProgress && !finalResult) {
     return (
-      <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
-        <div className="text-slate-200 text-5xl mb-4">⇄</div>
-        <p className="text-sm text-slate-400">
-          Enter an instruction and click Analyze to see the translation pipeline
-        </p>
+      <div className="h-full flex flex-col items-center justify-center text-center py-20">
+        <div className="text-5xl mb-4 opacity-10">⇄</div>
+        <p className="text-slate-500 text-sm font-medium">Enter an instruction and click Analyze</p>
+        <p className="text-slate-600 text-xs mt-1">The translation pipeline will stream here</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {(showProgress || (steps.size > 0)) && (
-        <StepProgress steps={steps} isLoading={isLoading} />
-      )}
+    <div>
+      {showProgress && <StepProgress steps={steps} isLoading={isLoading} />}
 
-      {showResults && (
+      {finalResult && (
         <>
-          <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-4">
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-              Pipeline Output
-            </h2>
+          <Section label="Original Source">
+            <TextBox content={finalResult.originalInstruction} dim />
+          </Section>
 
-            <TextBlock
-              label="Original Source"
-              content={finalResult.originalInstruction}
-              variant="subdued"
-            />
+          {simplifyResult?.rewritten && (
+            <Section label="Simplified Source" accent="text-blue-400">
+              <TextBox content={simplifyResult.rewritten} />
+            </Section>
+          )}
 
-            {simplifyResult?.rewritten && (
-              <TextBlock
-                label="Simplified Source (used for translation)"
-                content={simplifyResult.rewritten}
-                variant="accent"
-              />
-            )}
+          <Section label={`Translation → ${finalResult.targetLanguage}`}>
+            <TextBox content={finalResult.translation} mono />
+          </Section>
 
-            {(translateDone || finalResult.translation) && (
-              <TextBlock
-                label={`Translation → ${finalResult.targetLanguage}`}
-                content={finalResult.translation}
-                mono
-              />
-            )}
+          <Section label="Back-Translation → English" accent="text-emerald-500">
+            <TextBox content={finalResult.backTranslation} />
+          </Section>
 
-            {(backTranslateDone || finalResult.backTranslation) && (
-              <TextBlock
-                label="Back-Translation → English"
-                content={finalResult.backTranslation}
-              />
-            )}
-          </div>
+          {finalResult.tonalRailResult && (
+            <div className="mb-6">
+              <TonalRailCard result={finalResult.tonalRailResult} />
+            </div>
+          )}
 
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-4">
-              Structured Field Comparison
-            </h2>
+          {finalResult.driftIssues.length === 0 && <VerifiedBanner />}
+
+          <Section label="Field Comparison">
             <FieldComparisonTable
               sourceFields={finalResult.sourceFields}
               backTranslatedFields={finalResult.backTranslatedFields}
               driftIssues={finalResult.driftIssues}
             />
-          </div>
+          </Section>
         </>
       )}
     </div>

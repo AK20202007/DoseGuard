@@ -58,12 +58,46 @@ export type AnalysisResult = {
   teachBackQuestion: string | null;
   targetLanguage: string;
   languageQualityWarning: string | null;
+  tonalRailResult?: TonalRailResult;
   timestamp: string;
+};
+
+export type TonalIssue = {
+  expectedDigit: number;
+  foundStripped: string;
+  claudeForm: string;
+  mT5Form: string | null;
+  canonicalForm: string;
+  confusableWith: number | null;
+  confusableCanonical: string | null;
+  medicalRisk: 'critical' | 'high' | 'low';
+  issueType: 'diacritic_mismatch' | 'missing_numeral' | 'wrong_numeral' | 'mT5_unavailable';
+  explanation: string;
+};
+
+export type TonalNumeralRow = {
+  digit: number;
+  claudeForm: string;      // what appeared in the translation (Arabic numeral or Yoruba word)
+  canonicalForm: string;   // expected Yoruba canonical form
+  encoding: 'yoruba' | 'arabic'; // whether it was found as a Yoruba word or Arabic digit
+  status: 'pass' | 'fail';
+  issue?: TonalIssue;
+};
+
+export type TonalRailResult = {
+  ran: boolean;
+  mT5Available: boolean;
+  issues: TonalIssue[];
+  checkedNumerals: number[];
+  numeralRows: TonalNumeralRow[];
+  passed: boolean;
+  summary: string;
 };
 
 export type PipelineStep =
   | 'simplify'
   | 'translate'
+  | 'tonalRail'
   | 'backTranslate'
   | 'extractSource'
   | 'extractBack'

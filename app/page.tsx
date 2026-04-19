@@ -50,7 +50,7 @@ export default function Home() {
       });
 
       if (!response.ok || !response.body) {
-        setError('Request failed. Check that your ANTHROPIC_API_KEY is set in .env.local and restart the server.');
+        setError('Request failed. Check that ANTHROPIC_API_KEY is set in .env.local.');
         setIsLoading(false);
         return;
       }
@@ -62,33 +62,24 @@ export default function Home() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
-
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           try {
             const event: StreamEvent = JSON.parse(line.slice(6));
             setSteps(prev => new Map(prev).set(event.step, event));
             if (event.step === 'done') {
-              if (event.final) {
-                setFinalResult(event.final);
-                fetchAuditLog();
-              }
-              if (event.status === 'error') {
-                setError(event.error ?? 'Analysis failed unexpectedly.');
-              }
+              if (event.final) { setFinalResult(event.final); fetchAuditLog(); }
+              if (event.status === 'error') setError(event.error ?? 'Analysis failed.');
               setIsLoading(false);
             }
-          } catch {
-            // malformed SSE line — skip
-          }
+          } catch {}
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error. Is the server running?');
+      setError(err instanceof Error ? err.message : 'Network error.');
       setIsLoading(false);
     }
   }, [instruction, targetLanguage, useSimplification, isLoading, fetchAuditLog]);
@@ -107,71 +98,79 @@ export default function Home() {
     (steps.get('simplify')?.result as SimplificationResult | undefined) ?? null;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen flex flex-col bg-slate-950">
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between gap-4">
+      <header className="flex-shrink-0 bg-slate-900 border-b border-slate-800 px-6 py-4">
+        <div className="max-w-[1400px] mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-sm font-bold select-none">
+            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-blue-500/30">
               D
             </div>
             <div>
-              <h1 className="text-base font-bold text-slate-900 leading-none">DoseGuard</h1>
-              <p className="text-xs text-slate-500 mt-0.5">Medical Translation Safety Tool</p>
+              <h1 className="text-white font-bold text-base leading-none">DoseGuard</h1>
+              <p className="text-slate-400 text-xs mt-0.5">Medical Translation Safety</p>
             </div>
           </div>
-          <p className="text-xs text-slate-400 text-right max-w-sm hidden sm:block">
-            This tool supports translation safety review. It does not provide medical advice.
-            Do not use for emergencies.
-          </p>
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:flex items-center gap-1.5 text-xs text-blue-400 bg-blue-950 border border-blue-800 rounded-full px-3 py-1">
+              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-pulse" />
+              AI Safety Layer Active
+            </span>
+          </div>
         </div>
       </header>
 
-      {/* Info Banner */}
-      <div className="bg-blue-600 text-white text-xs py-2 px-4 text-center">
-        High-risk or uncertain translations require clinician or certified interpreter review
-        before patient use.
+      {/* Warning bar */}
+      <div className="flex-shrink-0 bg-blue-600 text-white text-xs py-2 px-6 text-center font-medium">
+        High-risk translations require clinician or certified interpreter review before patient use
       </div>
 
-      {/* Error Banner */}
+      {/* Error */}
       {error && (
-        <div className="bg-red-50 border-b border-red-200 text-red-700 text-sm py-2.5 px-4 text-center">
+        <div className="flex-shrink-0 bg-red-900/80 border-b border-red-700 text-red-200 text-sm py-2.5 px-6 text-center">
           {error}
         </div>
       )}
 
-      {/* Main 3-column grid */}
-      <main className="flex-1 max-w-[1600px] w-full mx-auto px-4 py-4 grid grid-cols-12 gap-4 items-start">
-        {/* Left: Input — 3 cols */}
-        <div className="col-span-12 md:col-span-3">
-          <InputPanel
-            instruction={instruction}
-            setInstruction={setInstruction}
-            targetLanguage={targetLanguage}
-            setTargetLanguage={setTargetLanguage}
-            useSimplification={useSimplification}
-            setUseSimplification={setUseSimplification}
-            onAnalyze={handleAnalyze}
-            isLoading={isLoading}
-            simplificationResult={simplificationResult}
-          />
+      {/* Body — 3 pane layout */}
+      <div className="flex-1 flex overflow-hidden max-w-[1400px] w-full mx-auto">
+
+        {/* Left pane — Input */}
+        <div className="w-[300px] flex-shrink-0 border-r border-slate-800 overflow-y-auto bg-slate-900">
+          <div className="p-5">
+            <InputPanel
+              instruction={instruction}
+              setInstruction={setInstruction}
+              targetLanguage={targetLanguage}
+              setTargetLanguage={setTargetLanguage}
+              useSimplification={useSimplification}
+              setUseSimplification={setUseSimplification}
+              onAnalyze={handleAnalyze}
+              isLoading={isLoading}
+              simplificationResult={simplificationResult}
+            />
+          </div>
         </div>
 
-        {/* Center: Pipeline Output — 6 cols */}
-        <div className="col-span-12 md:col-span-6">
-          <PipelinePanel steps={steps} finalResult={finalResult} isLoading={isLoading} />
+        {/* Center pane — Pipeline */}
+        <div className="flex-1 overflow-y-auto bg-slate-950 border-r border-slate-800">
+          <div className="p-5">
+            <PipelinePanel steps={steps} finalResult={finalResult} isLoading={isLoading} />
+          </div>
         </div>
 
-        {/* Right: Risk Analysis — 3 cols */}
-        <div className="col-span-12 md:col-span-3">
-          <RiskPanel finalResult={finalResult} isLoading={isLoading} />
+        {/* Right pane — Risk */}
+        <div className="w-[300px] flex-shrink-0 overflow-y-auto bg-slate-900">
+          <div className="p-5">
+            <RiskPanel finalResult={finalResult} isLoading={isLoading} />
+          </div>
         </div>
-      </main>
+      </div>
 
-      {/* Demo Panel */}
-      <DemoPanel onSelectDemo={handleSelectDemo} activeDemoId={activeDemoId} />
-
-      {/* Audit Log */}
+      {/* Bottom demo strip */}
+      <div className="flex-shrink-0 bg-slate-900 border-t border-slate-800">
+        <DemoPanel onSelectDemo={handleSelectDemo} activeDemoId={activeDemoId} />
+      </div>
       <AuditLog entries={auditLog} />
     </div>
   );
