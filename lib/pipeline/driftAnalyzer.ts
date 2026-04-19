@@ -19,6 +19,46 @@ function normalizeForComparison(value: string | null): string | null {
     .trim();
 }
 
+// Canonical forms for common medically-equivalent expressions to avoid false positives.
+function canonicalizeFieldValue(value: string | null, field: keyof MedicationFields): string | null {
+  const norm = normalizeForComparison(value);
+  if (norm === null) return null;
+
+  if (field === 'frequency' || field === 'interval') {
+    // Map equivalent frequency phrases to a canonical form
+    const freqMap: [RegExp, string][] = [
+      [/\b(once\s*(daily|a\s*day|per\s*day)|one\s*time\s*(daily|a\s*day)|1\s*time\s*(daily|a\s*day)|1x\s*(daily|a\s*day)?|every\s*24\s*hours?|qd|q\.d\.)\b/i, 'once daily'],
+      [/\b(twice\s*(daily|a\s*day|per\s*day)|two\s*times\s*(daily|a\s*day)|2\s*times\s*(daily|a\s*day)|2x\s*(daily|a\s*day)?|every\s*12\s*hours?|bid|b\.i\.d\.)\b/i, 'twice daily'],
+      [/\b(three\s*times\s*(daily|a\s*day)|3\s*times\s*(daily|a\s*day)|3x\s*(daily|a\s*day)?|every\s*8\s*hours?|tid|t\.i\.d\.)\b/i, 'three times daily'],
+      [/\b(four\s*times\s*(daily|a\s*day)|4\s*times\s*(daily|a\s*day)|4x\s*(daily|a\s*day)?|every\s*6\s*hours?|qid|q\.i\.d\.)\b/i, 'four times daily'],
+    ];
+    for (const [pattern, canonical] of freqMap) {
+      if (pattern.test(norm)) return canonical;
+    }
+  }
+
+  if (field === 'duration') {
+    // Normalize "for 7 days" vs "7 days" → strip leading "for"
+    return norm.replace(/^for\s+/, '');
+  }
+
+  if (field === 'dosage_unit') {
+    // Normalize plurals and abbreviation variants
+    const unitMap: [RegExp, string][] = [
+      [/^tablets?$/, 'tablet'],
+      [/^capsules?$/, 'capsule'],
+      [/^milligrams?$/, 'mg'],
+      [/^micrograms?$/, 'mcg'],
+      [/^milliliters?$/, 'ml'],
+    ];
+    for (const [pattern, canonical] of unitMap) {
+      if (pattern.test(norm)) return canonical;
+    }
+  }
+
+  return norm;
+}
+
 function extractNumbers(text: string): number[] {
   const matches = text.match(/\d+(?:\.\d+)?/g);
   return matches ? matches.map(Number) : [];
@@ -86,15 +126,17 @@ export function analyzeDrift(
 
     if (sv === null) continue;
 
-    const normSv = normalizeForComparison(sv);
-    const normBv = normalizeForComparison(bv);
-    if (normSv === normBv) continue;
+    // Use canonical form for comparison to avoid false positives on equivalent expressions
+    const canonSv = canonicalizeFieldValue(sv, field);
+    const canonBv = canonicalizeFieldValue(bv, field);
+    if (canonSv === canonBv) continue;
 
-    // Numeric drift for dosage fields
+    // Numeric drift for dosage fields: only flag if the actual numbers differ
     if (field === 'dosage_amount' || field === 'max_daily_dose') {
       const numsS = extractNumbers(sv);
       const numsB = extractNumbers(bv!);
-      if (numsS.length > 0 && numsB.length > 0 && numsS[0] !== numsB[0]) {
+      if (numsS.length > 0 && numsB.length > 0) {
+        if (numsS[0] === numsB[0]) continue; // same number, minor phrasing difference only
         issues.push({
           field,
           type: 'value_changed',
@@ -107,7 +149,7 @@ export function analyzeDrift(
       }
     }
 
-    // Negation drift
+    // Negation drift: only flag if negation appears/disappears
     const svHasNeg = hasNegation(sv);
     const bvHasNeg = hasNegation(bv!);
     if (svHasNeg !== bvHasNeg) {
@@ -121,6 +163,9 @@ export function analyzeDrift(
       });
       continue;
     }
+
+    // Skip low-priority fields if values are semantically similar
+    if (fieldSeverity(field) === 'low' && semanticallySimilar(sv, bv!)) continue;
 
     issues.push({
       field,
