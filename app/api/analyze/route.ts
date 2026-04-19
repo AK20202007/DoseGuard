@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
 
         // ── Step 6: Drift analysis + diacritic validation + risk scoring ──
         emit({ step: 'analyze', status: 'running' });
-        const driftIssues = analyzeDrift(sourceFields, backTranslatedFields);
+        const driftIssues = await analyzeDrift(sourceFields, backTranslatedFields, effectiveSource, backTranslation);
         const diacriticIssues = targetLanguage === 'Yoruba'
           ? validateDiacritics(translation)
           : [];

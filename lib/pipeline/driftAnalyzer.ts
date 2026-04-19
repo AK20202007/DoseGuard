@@ -1,4 +1,7 @@
 import type { MedicationFields, DriftIssue } from '@/lib/types';
+import { getClient } from '@/lib/claude';
+import { buildWarningCheckPrompt, buildFieldCheckPrompt, buildSentenceEquivalencePrompt } from '@/lib/prompts/warningCheck';
+import type Anthropic from '@anthropic-ai/sdk';
 
 const HIGH_WEIGHT_FIELDS: Array<keyof MedicationFields> = [
   'dosage_amount',
@@ -16,6 +19,8 @@ const NUMBER_WORDS: Record<string, number> = {
   zero: 0, one: 1, two: 2, three: 3, four: 4,
   five: 5, six: 6, seven: 7, eight: 8, nine: 9,
   ten: 10, eleven: 11, twelve: 12,
+  thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+  seventeen: 17, eighteen: 18, nineteen: 19,
   twenty: 20, thirty: 30, forty: 40, fifty: 50,
   sixty: 60, seventy: 70, eighty: 80, ninety: 90,
   once: 1, twice: 2,
@@ -145,7 +150,7 @@ function extractNumbers(text: string): number[] {
 }
 
 function hasNegation(text: string): boolean {
-  return /\b(not|no|never|avoid|do not|don't|stop|contraindicated|prohibited)\b/i.test(text);
+  return /\b(not|no|nothing|never|avoid|do not|don't|stop|contraindicated|prohibited|npo|nil\s+by\s+mouth|nothing\s+by\s+mouth)\b/i.test(text);
 }
 
 // Common medical phrasing synonyms. Applied before semantic comparison so
@@ -213,6 +218,82 @@ function semanticallySimilar(a: string, b: string): boolean {
   return matchCount / wordsA.length >= threshold;
 }
 
+async function callHaikuCheck(
+  warning: string,
+  backAllText: string,
+  client: Anthropic,
+): Promise<boolean> {
+  try {
+    const { system, user } = buildWarningCheckPrompt(warning, backAllText);
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 5,
+      temperature: 0,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    const text = response.content[0].type === 'text' ? response.content[0].text.trim() : '';
+    return text.toUpperCase().startsWith('YES');
+  } catch {
+    return false;
+  }
+}
+
+async function callHaikuFieldCheck(
+  sv: string,
+  bv: string,
+  client: Anthropic,
+): Promise<boolean> {
+  try {
+    const { system, user } = buildFieldCheckPrompt(sv, bv);
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 5,
+      temperature: 0,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    const text = response.content[0].type === 'text' ? response.content[0].text.trim() : '';
+    return text.toUpperCase().startsWith('YES');
+  } catch {
+    return false;
+  }
+}
+
+async function callHaikuSentenceCheck(
+  sourceText: string,
+  backText: string,
+  client: Anthropic,
+): Promise<boolean> {
+  try {
+    const { system, user } = buildSentenceEquivalencePrompt(sourceText, backText);
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 5,
+      temperature: 0,
+      system,
+      messages: [{ role: 'user', content: user }],
+    });
+    const text = response.content[0].type === 'text' ? response.content[0].text.trim() : '';
+    return text.toUpperCase().startsWith('YES');
+  } catch {
+    return false;
+  }
+}
+
+async function warningSemanticMatch(
+  warning: string,
+  backAllText: string,
+  backWarnings: string[],
+  client: Anthropic,
+): Promise<{ matchingBack: string | null; foundAnywhere: boolean }> {
+  const matchingBack = backWarnings.find(bw => semanticallySimilar(warning, bw)) ?? null;
+  if (matchingBack !== null) return { matchingBack, foundAnywhere: true };
+  if (semanticallySimilar(warning, backAllText)) return { matchingBack: null, foundAnywhere: true };
+  const foundByAI = await callHaikuCheck(warning, backAllText, client);
+  return { matchingBack: null, foundAnywhere: foundByAI };
+}
+
 function fieldSeverity(field: keyof MedicationFields): DriftIssue['severity'] {
   if (HIGH_WEIGHT_FIELDS.includes(field)) return 'high';
   if (MEDIUM_HIGH_FIELDS.includes(field)) return 'medium';
@@ -220,11 +301,35 @@ function fieldSeverity(field: keyof MedicationFields): DriftIssue['severity'] {
   return 'low';
 }
 
-export function analyzeDrift(
+export async function analyzeDrift(
   sourceFields: MedicationFields,
   backFields: MedicationFields,
-): DriftIssue[] {
+  sourceText?: string,
+  backText?: string,
+): Promise<DriftIssue[]> {
   const issues: DriftIssue[] = [];
+  const client = getClient();
+
+  // Full corpus of all back-translation text — used as fallback when a field
+  // is present in the source but the extractor filed its content under a
+  // different field in the back-translation.
+  const backAllTextFull = [
+    backFields.medication_name,
+    backFields.dosage_amount,
+    backFields.dosage_unit,
+    backFields.frequency,
+    backFields.interval,
+    backFields.route,
+    backFields.duration,
+    backFields.max_daily_dose,
+    backFields.food_instruction,
+    backFields.patient_group,
+    backFields.conditionality,
+    backFields.notes,
+    ...backFields.warnings,
+  ]
+    .filter((v): v is string => typeof v === 'string' && v.length > 0)
+    .join(' ');
 
   const scalarFields: Array<keyof MedicationFields> = [
     'medication_name',
@@ -248,6 +353,10 @@ export function analyzeDrift(
     if (sv === null && bv === null) continue;
 
     if (sv !== null && bv === null) {
+      // Before flagging as omitted, check whether the content appears anywhere
+      // in the back-translation (extractor may have filed it under a different field).
+      if (semanticallySimilar(sv, backAllTextFull)) continue;
+      if (await callHaikuFieldCheck(sv, backAllTextFull, client)) continue;
       issues.push({
         field,
         type: 'omitted',
@@ -305,6 +414,8 @@ export function analyzeDrift(
     const sev = fieldSeverity(field);
     if ((sev === 'low' || sev === 'medium') && semanticallySimilar(sv, bv!)) continue;
 
+    if (await callHaikuFieldCheck(sv, bv!, client)) continue;
+
     issues.push({
       field,
       type: 'mismatch',
@@ -331,8 +442,12 @@ export function analyzeDrift(
     .join(' ');
 
   for (const warning of sourceFields.warnings) {
-    const matchingBack = backFields.warnings.find(bw => semanticallySimilar(warning, bw)) ?? null;
-    const foundAnywhere = matchingBack !== null || semanticallySimilar(warning, backAllText);
+    const { matchingBack, foundAnywhere } = await warningSemanticMatch(
+      warning,
+      backAllText,
+      backFields.warnings,
+      client,
+    );
 
     if (!foundAnywhere) {
       issues.push({
@@ -351,6 +466,26 @@ export function analyzeDrift(
         sourceValue: warning,
         backValue: matchingBack,
         explanation: `Warning negation lost: source says "${warning}", back-translation says "${matchingBack}".`,
+      });
+    }
+  }
+
+  // Primary semantic gate: always run a full-sentence Haiku check on every translation.
+  // If the instructions mean the same thing overall, all field-level issues are suppressed —
+  // they are phrasing differences, not clinically meaningful errors.
+  // If Haiku detects a difference but field analysis found nothing specific, surface a
+  // generic warning so the reviewer knows something may be off.
+  if (sourceText && backText) {
+    const equivalent = await callHaikuSentenceCheck(sourceText, backText, client);
+    if (equivalent) return [];
+    if (issues.length === 0) {
+      issues.push({
+        field: 'notes',
+        type: 'mismatch',
+        severity: 'medium',
+        sourceValue: sourceText,
+        backValue: backText,
+        explanation: 'The re-read translation may differ in meaning from the original. Review the translation carefully before patient use.',
       });
     }
   }
