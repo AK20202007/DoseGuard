@@ -300,16 +300,18 @@ async def analyze(file: UploadFile = File(...)):
         }
 
     # ── Layer 2 safety check ─────────────────────────────────────────────────
-    # Runs when at least 2/3 engines agree (majority). When only 2 agree,
-    # the result is flagged with reduced_confidence=True.
+    # Always runs — uses the FDA-validated drug name regardless of OCR consensus.
+    # Even if engines disagree on the name, FDA already picked the best match.
     safety_result = None
-    if majority_reached and merged_fields.get("medication_name"):
+    # Use FDA name as the authoritative medication name for safety check
+    safety_med_name = (fda_name or merged_fields.get("medication_name") or "").lower() or None
+    if safety_med_name:
         try:
             dose_str = merged_fields.get("dose_value")
             dose_val = float(dose_str) if dose_str else None
             mock_consensus = ConsensusResult(
                 passed=True,
-                medication_name=merged_fields.get("medication_name"),
+                medication_name=safety_med_name,   # always use FDA-validated name
                 dose_value=dose_val,
                 dose_unit=merged_fields.get("dose_unit"),
                 frequency=merged_fields.get("frequency"),
