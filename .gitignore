@@ -38,7 +38,9 @@ yarn-error.log*
 
 # Test artifacts
 tests/ocr_test_images/downloads/
-tests/results/
+tests/results/*.json
+# Keep sample snapshot
+!tests/results/sample_cross_validation_report.json
 
 # Model weights (too large for git)
 *.onnx

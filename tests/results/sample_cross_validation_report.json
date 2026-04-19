@@ -1,0 +1,269 @@
+{
+  "summary": {
+    "image_dir": "tests/ocr_test_images/synthetic",
+    "total_images": 24,
+    "available_engines": [
+      "easyocr",
+      "tesseract"
+    ],
+    "unavailable_engines": [
+      "llava"
+    ],
+    "consensus_passed": 24,
+    "recapture_required": 0,
+    "consensus_pass_rate": 1.0,
+    "merged_ground_truth_accuracy": {
+      "medication_name": 1.0,
+      "dose_value": 1.0,
+      "dose_unit": 1.0,
+      "frequency": 1.0
+    }
+  },
+  "engine_reliability": {
+    "easyocr": {
+      "overall_reliability": 1.0,
+      "field_reliability": {
+        "medication_name": 1.0,
+        "dose_value": 1.0,
+        "dose_unit": 1.0,
+        "frequency": 1.0
+      },
+      "pairwise_agreement": {
+        "easyocr_vs_tesseract": 1.0
+      },
+      "grade": "A"
+    },
+    "tesseract": {
+      "overall_reliability": 1.0,
+      "field_reliability": {
+        "medication_name": 1.0,
+        "dose_value": 1.0,
+        "dose_unit": 1.0,
+        "frequency": 1.0
+      },
+      "pairwise_agreement": {
+        "easyocr_vs_tesseract": 1.0
+      },
+      "grade": "A"
+    }
+  },
+  "per_image_sample": [
+    {
+      "fields": {
+        "medication_name": {
+          "votes": {
+            "easyocr": "lisinopril",
+            "tesseract": "lisinopril"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "lisinopril",
+          "merge_confidence": 1.0
+        },
+        "dose_value": {
+          "votes": {
+            "easyocr": "10",
+            "tesseract": "10"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "10",
+          "merge_confidence": 1.0
+        },
+        "dose_unit": {
+          "votes": {
+            "easyocr": "mg",
+            "tesseract": "mg"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "mg",
+          "merge_confidence": 1.0
+        },
+        "frequency": {
+          "votes": {
+            "easyocr": "once daily",
+            "tesseract": "once daily"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "once daily",
+          "merge_confidence": 1.0
+        }
+      },
+      "merged": {
+        "medication_name": "lisinopril",
+        "dose_value": "10",
+        "dose_unit": "mg",
+        "frequency": "once daily"
+      },
+      "image_consensus_score": 1.0,
+      "all_critical_unanimous": true,
+      "status": "passed",
+      "file": "label_00_lisinopril_clean.png",
+      "ground_truth": {
+        "medication_name": "lisinopril",
+        "dose_value": 10.0,
+        "dose_unit": "mg",
+        "frequency": "once daily"
+      }
+    },
+    {
+      "fields": {
+        "medication_name": {
+          "votes": {
+            "easyocr": "lisinopril",
+            "tesseract": "lisinopril"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "lisinopril",
+          "merge_confidence": 1.0
+        },
+        "dose_value": {
+          "votes": {
+            "easyocr": "10",
+            "tesseract": "10"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "10",
+          "merge_confidence": 1.0
+        },
+        "dose_unit": {
+          "votes": {
+            "easyocr": "mg",
+            "tesseract": "mg"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "mg",
+          "merge_confidence": 1.0
+        },
+        "frequency": {
+          "votes": {
+            "easyocr": "once daily",
+            "tesseract": "once daily"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "once daily",
+          "merge_confidence": 1.0
+        }
+      },
+      "merged": {
+        "medication_name": "lisinopril",
+        "dose_value": "10",
+        "dose_unit": "mg",
+        "frequency": "once daily"
+      },
+      "image_consensus_score": 1.0,
+      "all_critical_unanimous": true,
+      "status": "passed",
+      "file": "label_00_lisinopril_noisy.png",
+      "ground_truth": {
+        "medication_name": "lisinopril",
+        "dose_value": 10.0,
+        "dose_unit": "mg",
+        "frequency": "once daily"
+      }
+    },
+    {
+      "fields": {
+        "medication_name": {
+          "votes": {
+            "easyocr": "metformin",
+            "tesseract": "metformin"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "metformin",
+          "merge_confidence": 1.0
+        },
+        "dose_value": {
+          "votes": {
+            "easyocr": "500",
+            "tesseract": "500"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "500",
+          "merge_confidence": 1.0
+        },
+        "dose_unit": {
+          "votes": {
+            "easyocr": "mg",
+            "tesseract": "mg"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "mg",
+          "merge_confidence": 1.0
+        },
+        "frequency": {
+          "votes": {
+            "easyocr": "twice daily",
+            "tesseract": "twice daily"
+          },
+          "pairwise": {
+            "easyocr_vs_tesseract": true
+          },
+          "agreement_score": 1.0,
+          "unanimous": true,
+          "merged_value": "twice daily",
+          "merge_confidence": 1.0
+        }
+      },
+      "merged": {
+        "medication_name": "metformin",
+        "dose_value": "500",
+        "dose_unit": "mg",
+        "frequency": "twice daily"
+      },
+      "image_consensus_score": 1.0,
+      "all_critical_unanimous": true,
+      "status": "passed",
+      "file": "label_01_metformin_clean.png",
+      "ground_truth": {
+        "medication_name": "metformin",
+        "dose_value": 500.0,
+        "dose_unit": "mg",
+        "frequency": "twice daily"
+      }
+    }
+  ],
+  "note": "Sample snapshot \u2014 run tests/cross_validate_ocr.py to regenerate full report"
+}
