@@ -6,6 +6,7 @@ import { backTranslateInstruction } from '@/lib/pipeline/backTranslator';
 import { extractMedicationFields } from '@/lib/pipeline/semanticExtractor';
 import { analyzeDrift } from '@/lib/pipeline/driftAnalyzer';
 import { scoreRisk } from '@/lib/pipeline/riskScorer';
+import { scoreConfidence } from '@/lib/pipeline/confidenceScorer';
 import { generateTeachBack } from '@/lib/pipeline/teachBackGenerator';
 import { appendAuditLog } from '@/lib/auditLog';
 import type { AnalysisResult, StreamEvent, SupportedLanguage } from '@/lib/types';
@@ -72,7 +73,14 @@ export async function POST(request: NextRequest) {
           langMeta,
           extractionFailed,
         );
-        emit({ step: 'analyze', status: 'complete', result: { driftIssues, riskScore, riskLevel } });
+        const confidenceScore = scoreConfidence(
+          driftIssues,
+          riskScore,
+          langMeta,
+          sourceFields,
+          backTranslatedFields,
+        );
+        emit({ step: 'analyze', status: 'complete', result: { driftIssues, riskScore, riskLevel, confidenceScore } });
 
         // ── Step 7: Teach-back ────────────────────────────────────────────
         emit({ step: 'teachBack', status: 'running' });
@@ -97,6 +105,7 @@ export async function POST(request: NextRequest) {
           riskLevel,
           riskExplanation,
           recommendation,
+          confidenceScore,
           teachBackQuestion,
           targetLanguage,
           languageQualityWarning: langMeta.warningMessage,

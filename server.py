@@ -391,21 +391,47 @@ async def analyze(file: UploadFile = File(...)):
         ),
     )
 
+    # ── Identify "completely off" engines ─────────────────────────────────────
+    # An engine whose medication_name has very low similarity to the FDA name
+    # is excluded from the OCR consensus component (but still shown in the UI).
+    from difflib import SequenceMatcher as _SM
+    fda_norm = (fda_name or "").lower()
+    disqualified_engines: set[str] = set()
+    if fda_norm:
+        for eng_name, r in available.items():
+            eng_drug = _norm((r.get("fields") or {}).get("medication_name"))
+            if eng_drug is None:
+                disqualified_engines.add(eng_name)   # blank = excluded
+            else:
+                sim = _SM(None, eng_drug, fda_norm).ratio()
+                if sim < 0.25:   # completely different — e.g. "Ning" vs "metformin"
+                    disqualified_engines.add(eng_name)
+
+    # Recompute consensus using only engines that are NOT disqualified
+    trusted = {n: r for n, r in available.items() if n not in disqualified_engines}
+    if trusted and len(trusted) >= 1:
+        trusted_scores = []
+        for field in CRITICAL_FIELDS:
+            t_votes = {n: _norm((r["fields"] or {}).get(field)) for n, r in trusted.items()}
+            _, t_score = _plurality_vote(t_votes)
+            trusted_scores.append(t_score)
+        trusted_consensus = round(min(trusted_scores), 4) if trusted_scores else 0.0
+    else:
+        trusted_consensus = overall_consensus   # fallback
+
     # ── Gradient confidence score (0–100) ────────────────────────────────────
-    def _compute_confidence(
-        consensus: float,        # 0–1 min agreement across critical fields
-        n_available: int,        # engines with data
-        fda_score: float,        # 0–1 FDA name match confidence
-        engines_matching_fda: int,
-        safety: dict | None,
-        llm_fields: dict | None,
-        llm_model: str,
+    def _compute_confidence(  # noqa
+        consensus: float, fda_score: float, engines_matching_fda: int,
+        safety: dict | None, llm_fields: dict | None, llm_model: str,
+        disqualified: set[str], n_trusted: int,
     ) -> dict:
         score = 0.0
         breakdown: dict[str, float] = {}
 
-        # ── Component 1: OCR consensus (0–35 pts) ─────────────────────────
-        ocr_pts = round(consensus * 35, 1)
+        # ── Component 1: OCR consensus — trusted engines only (0–35 pts) ─
+        # Penalty for each disqualified engine: max 5 pts deducted each
+        disq_penalty = min(15.0, len(disqualified) * 5.0)
+        ocr_pts = round(max(0.0, consensus * 35 - disq_penalty), 1)
         breakdown["ocr_consensus"] = ocr_pts
         score += ocr_pts
 
@@ -468,13 +494,14 @@ async def analyze(file: UploadFile = File(...)):
 
     s2 = safety_result or {}
     confidence_score = _compute_confidence(
-        consensus=overall_consensus,
-        n_available=len(available),
+        consensus=trusted_consensus,
         fda_score=fda_score,
         engines_matching_fda=engines_matching_fda,
         safety=s2 if s2 else None,
         llm_fields=llm_fields,
         llm_model=llm_model,
+        disqualified=disqualified_engines,
+        n_trusted=len(trusted),
     )
 
     # ── Final response ────────────────────────────────────────────────────────
@@ -482,6 +509,7 @@ async def analyze(file: UploadFile = File(...)):
         "image_preview": f"data:image/jpeg;base64,{img_b64}",
         "filename": file.filename,
         "soft_failed_engines": list(soft_failed.keys()),
+        "disqualified_engines": list(disqualified_engines),
         "engines": engine_results,
         "cross_check": cross_check,
         "merged": {

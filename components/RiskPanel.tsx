@@ -3,6 +3,7 @@
 import type { AnalysisResult } from '@/lib/types';
 import { RiskBadge } from '@/components/RiskBadge';
 import { TeachBackCard } from '@/components/TeachBackCard';
+import { ConfidenceGauge } from '@/components/ConfidenceGauge';
 
 type Props = {
   finalResult: AnalysisResult | null;
@@ -68,6 +69,9 @@ export function RiskPanel({ finalResult, isLoading }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* Confidence Score Gauge */}
+      <ConfidenceGauge confidence={finalResult.confidenceScore} />
+
       {/* Risk Score Card */}
       <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-3">
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">

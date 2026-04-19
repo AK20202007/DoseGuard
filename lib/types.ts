@@ -42,6 +42,20 @@ export type SimplificationResult = {
   is_ambiguous: boolean;
 };
 
+export type ConfidenceBreakdown = {
+  translation_quality: number;   // 0–40
+  language_tier:       number;   // 0–25
+  field_extraction:    number;   // 0–20
+  back_translation:    number;   // 0–15
+};
+
+export type ConfidenceScore = {
+  score: number;              // 0–100
+  label: 'High' | 'Good' | 'Moderate' | 'Low' | 'Very Low';
+  tier:  'high' | 'good' | 'moderate' | 'low' | 'very_low';
+  breakdown: ConfidenceBreakdown;
+};
+
 export type AnalysisResult = {
   originalInstruction: string;
   simplificationResult: SimplificationResult;
@@ -55,6 +69,7 @@ export type AnalysisResult = {
   riskLevel: RiskLevel;
   riskExplanation: string;
   recommendation: Recommendation;
+  confidenceScore: ConfidenceScore;
   teachBackQuestion: string | null;
   targetLanguage: string;
   languageQualityWarning: string | null;

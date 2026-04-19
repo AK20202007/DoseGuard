@@ -459,10 +459,13 @@ function render(d) {
   engineGrid.innerHTML = Object.entries(d.engines).map(([name, eng]) => {
     const available = eng.available;
     const isSoftFail = available && (d.soft_failed_engines || []).includes(name);
-    const badgeClass = isSoftFail ? 'badge-na'
+    const isDisqualified = available && (d.disqualified_engines || []).includes(name);
+    const badgeClass = isDisqualified ? 'badge-err'
+      : isSoftFail ? 'badge-na'
       : available ? 'badge-ok'
       : (eng.error?.includes('token') || eng.error?.includes('not set') ? 'badge-na' : 'badge-err');
-    const badgeText = isSoftFail ? 'NO DATA'
+    const badgeText = isDisqualified ? 'EXCLUDED'
+      : isSoftFail ? 'NO DATA'
       : available ? 'ONLINE'
       : (eng.error?.includes('token') || eng.error?.includes('not set') ? 'NO TOKEN' : 'ERROR');
 
@@ -484,10 +487,13 @@ function render(d) {
         <div class="rel-bar"><div class="rel-fill" style="width:${relPct}%;background:${relCol}"></div></div>
       </div>` : '';
 
-    const errBlock = isSoftFail
+    const errBlock = isDisqualified
+      ? `<div style="color:#fca5a5;font-size:12px;margin-top:8px;padding:8px;background:#450a0a;border:1px solid #7f1d1d;border-radius:6px">
+           Result too different from FDA-validated name — <strong>excluded from confidence score.</strong>
+         </div>`
+      : isSoftFail
       ? `<div style="color:var(--yellow);font-size:12px;margin-top:8px;padding:8px;background:#1c1500;border:1px solid #713f12;border-radius:6px">
-           ⚠ Engine ran but returned no data for this image.<br>
-           Excluded from consensus — other engines still voted.
+           Engine ran but returned no data. Excluded from consensus.
          </div>`
       : eng.error
         ? `<div style="color:var(--muted);font-size:12px;margin-top:8px;padding:8px;background:#0a0c14;border-radius:6px">${eng.error}</div>`
