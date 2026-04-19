@@ -446,6 +446,23 @@ function render(d) {
     </tr>`;
   }).join('');
 
+  // ── FDA drug-name lookup result ───────────────────────────────────────────
+  const fda = d.fda_name_lookup || {};
+  if (fda.validated_name) {
+    const conf = fda.confidence || 0;
+    const color = conf >= 0.9 ? 'var(--green)' : conf >= 0.7 ? 'var(--yellow)' : 'var(--red)';
+    const fdaBanner = document.createElement('div');
+    fdaBanner.style.cssText = `background:#1a1d27;border:1px solid ${color};border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px`;
+    fdaBanner.innerHTML = `
+      <span style="font-size:20px">🔬</span>
+      <div>
+        <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:1px">FDA Cross-Reference</div>
+        <div style="font-size:16px;font-weight:700;color:${color};margin-top:2px">${fda.validated_name}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Match confidence: ${(conf*100).toFixed(0)}%  ·  Candidates checked: ${(fda.candidates_checked||[]).join(', ')}</div>
+      </div>`;
+    document.getElementById('results').insertBefore(fdaBanner, document.getElementById('engine-cards'));
+  }
+
   // ── Merged corrected text ─────────────────────────────────────────────────
   const mts = document.getElementById('merged-text-section');
   const mergedText = d.merged?.merged_text || '';

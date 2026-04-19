@@ -28,6 +28,7 @@ from pipeline.ocr_engines.tesseract_engine import TesseractEngine
 from pipeline.ocr_engines.moondream_engine import MoondreamEngine
 from pipeline.layer2_safety_vault import DeterministicSafetyVault
 from pipeline.models import ConsensusResult, FieldConsensus, ExtractedPrescription
+from pipeline.drug_name_validator import extract_word_candidates, validate_drug_name
 
 from itertools import combinations
 from collections import Counter
@@ -150,6 +151,29 @@ async def analyze(file: UploadFile = File(...)):
     overall_consensus = round(min(scores) if scores else 0.0, 4)
     all_unanimous = all(cross_check[f]["unanimous"] for f in CRITICAL_FIELDS)
 
+    # ── FDA drug-name cross-reference ─────────────────────────────────────────
+    # Collect every capitalized word from all engines' raw text, query OpenFDA,
+    # and pick the one that matches a real drug name.  Overrides the OCR-parsed
+    # name when the regex parser guessed wrong (e.g. Abatacept on separate line).
+    all_raw = " ".join(
+        r.get("raw_text", "") for r in engine_results.values() if r.get("raw_text")
+    )
+    fda_candidates = extract_word_candidates(all_raw)[:12]  # top 12 unique words
+    fda_name, fda_score = await validate_drug_name(fda_candidates, timeout=6.0)
+
+    # Use FDA name if it's more confident than the OCR-parsed name
+    ocr_name = merged_fields.get("medication_name")
+    if fda_name and (not ocr_name or fda_score >= 0.75):
+        merged_fields["medication_name"] = fda_name.lower()
+        cross_check["medication_name"]["merged_value"] = fda_name.lower()
+        cross_check["medication_name"]["fda_validated"] = True
+
+    fda_result = {
+        "validated_name": fda_name,
+        "confidence": fda_score,
+        "candidates_checked": fda_candidates,
+    }
+
     # ── Reliability score per engine ─────────────────────────────────────────
     reliability: dict[str, dict] = {}
     for eng_name in available:
@@ -255,6 +279,7 @@ async def analyze(file: UploadFile = File(...)):
         },
         "reliability": reliability,
         "layer2_safety": safety_result,
+        "fda_name_lookup": fda_result,
     })
 
 
